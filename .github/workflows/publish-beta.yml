@@ -314,7 +314,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: backend-${{ matrix.platform }}
-          path: dist/release/openwatcher-${{ matrix.platform }}*
+          path: dist/release/openwatcher_v*
           if-no-files-found: error
 
   watch-apk:
@@ -481,7 +481,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.platform }}
-          path: dist/release/OpenWatcher-Desktop-${{ matrix.platform }}*
+          path: dist/release/desktop_v*
           if-no-files-found: error
 
   assemble-release:

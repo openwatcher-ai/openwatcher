@@ -11,7 +11,7 @@ func TestStageDesktopUpdateFindsMacAppBundle(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
-	archivePath := filepath.Join(t.TempDir(), "OpenWatcher-Desktop-darwin-arm64.zip")
+	archivePath := filepath.Join(t.TempDir(), "desktop_v0.3.0_macos_arm64.zip")
 	writeZipFile(t, archivePath, map[string]string{
 		"OpenWatcher.app/Contents/MacOS/openwatcher": "binary",
 		"OpenWatcher.app/Contents/Resources/file":    "resource",

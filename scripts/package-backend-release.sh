@@ -9,15 +9,15 @@ read -r GOOS_VALUE GOARCH_VALUE <<<"$(platform_go_values "$PLATFORM")"
 ensure_release_dir
 require_command go
 
-OUTPUT_NAME="openwatcher-${PLATFORM}"
-if [[ "$GOOS_VALUE" == "windows" ]]; then
-  OUTPUT_NAME+=".exe"
-fi
-OUTPUT_PATH="$RELEASE_DIR/$OUTPUT_NAME"
 BACKEND_BUILD_VERSION="$(trim_value "${OPENWATCHER_BACKEND_VERSION:-${OPENWATCHER_DESKTOP_VERSION:-}}")"
 if [[ -z "$BACKEND_BUILD_VERSION" ]]; then
   BACKEND_BUILD_VERSION="$(dev_build_version)"
 fi
+OUTPUT_NAME="openwatcher_$(release_filename_version "$BACKEND_BUILD_VERSION")_$(artifact_platform_label "$PLATFORM")"
+if [[ "$GOOS_VALUE" == "windows" ]]; then
+  OUTPUT_NAME+=".exe"
+fi
+OUTPUT_PATH="$RELEASE_DIR/$OUTPUT_NAME"
 
 note "构建后端发布产物：$OUTPUT_NAME"
 (

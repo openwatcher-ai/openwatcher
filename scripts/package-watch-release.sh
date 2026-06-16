@@ -81,8 +81,12 @@ LATEST_APK_URL_JSON="$(json_escape "$LATEST_APK_URL")"
 CHANGELOG_URL_JSON="$(json_escape "$CHANGELOG_URL")"
 RELEASE_CHANNEL_JSON="$(json_escape "$RELEASE_CHANNEL")"
 BUILT_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-STAMP="$(date -u '+%Y%m%d-%H%M%S')"
-FINAL_APK="$DIST_DIR/openwatcher-watchapp-v${VERSION_NAME}-${SAFE_SLUG}-${COMMIT}-${STAMP}.apk"
+VERSION_LABEL="$(release_filename_version "$VERSION_NAME")"
+if [[ "$SAFE_SLUG" == runtime-* ]]; then
+  FINAL_APK="$DIST_DIR/watchapp-runtime_${VERSION_LABEL}.apk"
+else
+  FINAL_APK="$DIST_DIR/watchapp_${VERSION_LABEL}.apk"
+fi
 
 find_apksigner() {
   if [[ -n "${ANDROID_HOME:-}" && -x "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" 2>/dev/null | sort | tail -1)/apksigner" ]]; then

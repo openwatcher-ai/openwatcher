@@ -47,8 +47,8 @@ func TestManagerCheckForUpdates(t *testing.T) {
 				"version": "0.2.1",
 				"platforms": map[string]any{
 					"darwin-arm64": map[string]any{
-						"artifact":    "OpenWatcher-Desktop-darwin-arm64.zip",
-						"downloadUrl": "https://example.com/OpenWatcher-Desktop-darwin-arm64.zip",
+						"artifact":    "desktop_v0.2.1_macos_arm64.zip",
+						"downloadUrl": "https://example.com/desktop_v0.2.1_macos_arm64.zip",
 						"sha256":      "fixture-sha",
 						"sizeBytes":   12345,
 					},
@@ -86,7 +86,7 @@ func TestManagerCheckForUpdates(t *testing.T) {
 	if got.LatestDesktopVersion != "0.2.1" {
 		t.Fatalf("LatestDesktopVersion = %q", got.LatestDesktopVersion)
 	}
-	if got.DesktopDownloadURL != "https://example.com/OpenWatcher-Desktop-darwin-arm64.zip" {
+	if got.DesktopDownloadURL != "https://example.com/desktop_v0.2.1_macos_arm64.zip" {
 		t.Fatalf("DesktopDownloadURL = %q", got.DesktopDownloadURL)
 	}
 	if !got.DesktopInstallable || got.DesktopArchiveKind != "zip" || got.DesktopSizeBytes != 12345 {

@@ -200,8 +200,8 @@ const fallbackHandlers = {
     currentDesktopVersion: "dev",
     latestDesktopVersion: "dev-next",
     desktopUpdateAvailable: true,
-    desktopDownloadUrl: "https://example.com/OpenWatcher-Desktop-darwin-arm64.zip",
-    desktopArtifact: "OpenWatcher-Desktop-darwin-arm64.zip",
+    desktopDownloadUrl: "https://example.com/desktop_v0.1.0_macos_arm64.zip",
+    desktopArtifact: "desktop_v0.1.0_macos_arm64.zip",
     desktopSha256: "fixture-sha",
     desktopSizeBytes: 42881234,
     desktopArchiveKind: "zip",
@@ -223,7 +223,7 @@ const fallbackHandlers = {
     phase: "restarting",
     message: "更新程序已启动，Desktop 将自动重启",
     version: "dev-next",
-    artifact: "OpenWatcher-Desktop-darwin-arm64.zip"
+    artifact: "desktop_v0.1.0_macos_arm64.zip"
   }),
   GetInstallerStatus: async () => structuredClone(mockInstallerState),
   GetDeveloperEnvironmentSnapshot: async () => structuredClone(mockDeveloperSnapshot),

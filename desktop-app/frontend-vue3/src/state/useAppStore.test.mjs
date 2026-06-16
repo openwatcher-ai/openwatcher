@@ -393,7 +393,7 @@ test("installDesktopUpdateAction 会调用后端安装并保存状态", async ()
           phase: "restarting",
           message: "更新程序已启动，Desktop 将自动重启",
           version: "dev-next",
-          artifact: "OpenWatcher-Desktop-darwin-arm64.zip"
+          artifact: "desktop_v0.1.0_macos_arm64.zip"
         }
       }
     },
@@ -407,7 +407,7 @@ test("installDesktopUpdateAction 会调用后端安装并保存状态", async ()
     desktopUpdateAvailable: true,
     desktopInstallable: true,
     latestDesktopVersion: "dev-next",
-    desktopArtifact: "OpenWatcher-Desktop-darwin-arm64.zip",
+    desktopArtifact: "desktop_v0.1.0_macos_arm64.zip",
     desktopSizeBytes: 1024
   }
 

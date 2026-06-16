@@ -27,6 +27,7 @@ beta-YYYY.MM.DD.N
 - 版本递增、组件复用和发布范围判断必须以最新公开 GitHub Release 的 `release-manifest.json` 以及 official 仓发布的 channel metadata 为准；仓库内 `watch-app/RELEASE_BUILDS.md` 只作为人工审计日志，不能作为正式版本事实来源。
 - 正式发布产物必须来自 GitHub Actions。
 - 未变化组件必须明确标记为 `reused` 或 `not_included`，不得重新构造下载 URL。
+- 公开资产文件名应保持短而可读：组件名、组件版本和必要平台/架构即可；release tag、commit、构建时间和 sha256 必须放在 `release-manifest.json`、组件 metadata 与 `checksums.txt` 中。
 
 ## 2. 公开 release 事实包
 

@@ -14,12 +14,12 @@ fixture_watch_version_name="${OPENWATCHER_TEST_WATCH_VERSION_NAME:-$(printf '%s.
 fixture_watch_version_code="${OPENWATCHER_TEST_WATCH_VERSION_CODE:-1}"
 fixture_runtime_tag="runtime-v${fixture_desktop_version}"
 
-watch_apk="$PUBLIC_DIR/openwatcher-watchapp-fixture-release.apk"
+watch_apk="$PUBLIC_DIR/watchapp_v${fixture_watch_version_name}.apk"
 watch_metadata="$PUBLIC_DIR/latest-apk.json"
 watch_changelog="$PUBLIC_DIR/latest-apk-changelog.json"
-desktop_darwin="$PUBLIC_DIR/OpenWatcher-Desktop-darwin-arm64.zip"
-desktop_windows="$PUBLIC_DIR/OpenWatcher-Desktop-windows-amd64-Setup.exe"
-backend_bin="$PUBLIC_DIR/openwatcher-darwin-arm64"
+desktop_darwin="$PUBLIC_DIR/desktop_v${fixture_desktop_version}_macos_arm64.zip"
+desktop_windows="$PUBLIC_DIR/desktop_v${fixture_desktop_version}_windows_x64.exe"
+backend_bin="$PUBLIC_DIR/openwatcher_v${fixture_desktop_version}_macos_arm64"
 notices="$PUBLIC_DIR/THIRD_PARTY_NOTICES.md"
 runtime_manifest="$RUNTIME_DIR/runtime-manifest.json"
 
@@ -110,8 +110,8 @@ rg -n '^- 【手表应用】新增 fixture product release$' "$PUBLIC_DIR/releas
 
 desktop_only_dir="$TMP_DIR/desktop-only"
 mkdir -p "$desktop_only_dir"
-cp "$PUBLIC_DIR/OpenWatcher-Desktop-darwin-arm64.zip" "$desktop_only_dir/"
-cp "$PUBLIC_DIR/OpenWatcher-Desktop-windows-amd64-Setup.exe" "$desktop_only_dir/"
+cp "$PUBLIC_DIR/desktop_v${fixture_desktop_version}_macos_arm64.zip" "$desktop_only_dir/"
+cp "$PUBLIC_DIR/desktop_v${fixture_desktop_version}_windows_x64.exe" "$desktop_only_dir/"
 cp "$PUBLIC_DIR/THIRD_PARTY_NOTICES.md" "$desktop_only_dir/"
 run_generate_manifest "$desktop_only_dir" "beta-2026.06.11.2" "desktop" "修复 desktop only release" "$PUBLIC_DIR/release-manifest.json"
 run_generate_changelog "$desktop_only_dir"

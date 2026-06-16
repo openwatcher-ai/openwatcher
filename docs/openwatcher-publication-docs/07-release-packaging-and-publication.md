@@ -30,6 +30,18 @@ beta-YYYY.MM.DD.N
 
 它不代表统一产品版本。客户端更新判断只看组件版本和 official channel 中的 sha256、size 等事实。
 
+公开资产文件名只保留组件、版本和必要平台/架构，例如：
+
+```text
+watchapp_v0.1.0.apk
+watchapp-runtime_v0.1.0.apk
+desktop_v0.1.0_macos_arm64.dmg
+desktop_v0.1.0_windows_x64.exe
+openwatcher_v0.1.0_macos_arm64
+```
+
+release tag、commit、构建时间和 sha256 不进入文件名，统一写入 `release-manifest.json`、组件 metadata 和 `checksums.txt`。
+
 每次 Product Release 至少包含：
 
 ```text

@@ -77,6 +77,10 @@ component_status() {
 }
 
 desktop_artifact_platform() {
+  if [[ "$1" =~ ^desktop_v[0-9a-z][0-9a-z.-]*_(macos_x64|macos_arm64|windows_x64|windows_arm64)\.(zip|dmg|exe)$ ]]; then
+    artifact_platform_id_from_label "${BASH_REMATCH[1]}"
+    return 0
+  fi
   if [[ "$1" =~ ^OpenWatcher-Desktop-([a-z0-9]+-[a-z0-9]+)(-Setup)?\.(zip|dmg|exe)$ ]]; then
     printf '%s' "${BASH_REMATCH[1]}"
   fi
@@ -95,7 +99,7 @@ prefer_desktop_candidate() {
     return
   fi
   if [[ "$platform" == windows-* ]]; then
-    [[ "$candidate" == *-Setup.exe && "$current" != *-Setup.exe ]]
+    [[ "$candidate" == *.exe && "$current" != *.exe ]]
     return
   fi
   return 1
@@ -103,8 +107,11 @@ prefer_desktop_candidate() {
 
 artifact_component() {
   case "$1" in
+    desktop_v*) printf 'desktop' ;;
     OpenWatcher-Desktop-*) printf 'desktop' ;;
+    watchapp_*.apk|watchapp-runtime_*.apk) printf 'watch' ;;
     openwatcher-watchapp-*.apk) printf 'watch' ;;
+    openwatcher_v*) printf 'backend' ;;
     openwatcher-*.exe|openwatcher-darwin-*|openwatcher-windows-*) printf 'backend' ;;
     latest-apk*.json|channel-beta.json|changelog-entry.json|release-manifest.json) printf 'metadata' ;;
     *.json) printf 'metadata' ;;
@@ -191,7 +198,7 @@ if [[ "$(component_status desktop)" == "updated" ]]; then
         rank: $rank
       }' >>"$desktop_platforms_tmp"
     printf '\n' >>"$desktop_platforms_tmp"
-  done < <(find "$SCAN_DIR" -maxdepth 1 -type f -name 'OpenWatcher-Desktop-*' | sort)
+  done < <(find "$SCAN_DIR" -maxdepth 1 -type f \( -name 'desktop_v*' -o -name 'OpenWatcher-Desktop-*' \) | sort)
 
   [[ -s "$desktop_platforms_tmp" ]] || die "release_scope=$RELEASE_SCOPE 需要 Desktop 产物"
 else

@@ -10,6 +10,7 @@ WAILS_VERSION="${OPENWATCHER_WAILS_VERSION:-v2.12.0}"
 CHANNEL_MANIFEST_URL="${OPENWATCHER_RUNTIME_CHANNEL_MANIFEST_URL:-}"
 REPOSITORY_NAME="${OPENWATCHER_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-openwatcher-ai/openwatcher}}"
 DESKTOP_VERSION="$(require_desktop_version)"
+DESKTOP_ARTIFACT_VERSION="$(release_filename_version "$DESKTOP_VERSION")"
 
 declare -a FINAL_OUTPUTS=()
 SUCCEEDED=0
@@ -188,7 +189,7 @@ NODE
 }
 
 build_windows_setup() {
-  local setup_path="$RELEASE_DIR/OpenWatcher-Desktop-${PLATFORM}-Setup.exe"
+  local setup_path="$RELEASE_DIR/desktop_${DESKTOP_ARTIFACT_VERSION}_$(artifact_platform_label "$PLATFORM").exe"
   local setup_path_win
   local installer_dir="$ROOT_DIR/.tmp/nsis-${PLATFORM}"
   local script_path="$installer_dir/openwatcher-installer.nsi"
@@ -231,7 +232,7 @@ NSI
 }
 
 build_windows_portable_zip() {
-  local zip_path="$RELEASE_DIR/OpenWatcher-Desktop-${PLATFORM}.zip"
+  local zip_path="$RELEASE_DIR/desktop_${DESKTOP_ARTIFACT_VERSION}_$(artifact_platform_label "$PLATFORM").zip"
   rm -f "$zip_path"
   if command -v zip >/dev/null 2>&1; then
     (
@@ -259,8 +260,10 @@ build_windows_portable_zip() {
 build_macos_outputs() {
   local app_source="$1"
   local app_copy="$ROOT_DIR/.tmp/OpenWatcher.app"
-  local zip_path="$RELEASE_DIR/OpenWatcher-Desktop-${PLATFORM}.zip"
-  local dmg_path="$RELEASE_DIR/OpenWatcher-Desktop-${PLATFORM}.dmg"
+  local platform_label
+  platform_label="$(artifact_platform_label "$PLATFORM")"
+  local zip_path="$RELEASE_DIR/desktop_${DESKTOP_ARTIFACT_VERSION}_${platform_label}.zip"
+  local dmg_path="$RELEASE_DIR/desktop_${DESKTOP_ARTIFACT_VERSION}_${platform_label}.dmg"
 
   mkdir -p "$ROOT_DIR/.tmp"
   rm -rf "$app_copy" "$zip_path" "$dmg_path"

@@ -9,7 +9,7 @@
 - 不要把 debug APK 作为公开发布产物。
 - 不要把聊天传输、本地临时文件或 `watch-app/app/build/outputs/apk/...` 下的 Gradle 输出当作主 release artifact。
 - 每次执行 release package 都必须提供 `RELEASE_SUMMARY`，内容描述用户可感知变化，不能回退到最新 git commit 标题。
-- release artifact 必须使用 OpenWatcher 命名，例如 `openwatcher-watchapp-...apk`。
+- release artifact 文件名保持短名，Watch Product Release 使用 `watchapp_v<versionName>.apk`，Runtime 随附 Watch APK 使用 `watchapp-runtime_v<versionName>.apk`；release tag、commit、构建时间和 sha256 放在 manifest、metadata 与 checksums 中，不塞进文件名。
 - Release notes、metadata、headers、文件名和文档不得重新引入旧私有品牌、私有域名、本机用户路径或旧包名。
 
 ## 版本纪律
@@ -63,7 +63,8 @@ OPENWATCHER_WATCH_VERSION_CODE="<versionCode>" \
 scripts/package-watch-release.sh <short-release-slug>
 ```
 
-Slug 规则：短而描述性，例如 `release`、`ui-fix`、`pairing-fix`。不要包含 `v`、`versionName`、时间戳或 commit id；脚本会把这些写入最终文件名。
+Slug 规则：短而描述性，例如 `release`、`ui-fix`、`pairing-fix`。不要包含 `v`、`versionName`、时间戳或 commit id；追溯信息由 metadata、manifest 和 checksums 保存。
+脚本只用 slug 判断是否为 Runtime 随附 APK，不会把 slug 写进最终文件名。
 
 7. 验证最终 artifact，而不是只验证 Gradle 原始输出：
 

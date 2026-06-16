@@ -45,6 +45,40 @@ validate_version_code() {
     || die "$label 必须是正整数：$value"
 }
 
+release_filename_version() {
+  local value
+  value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  value="${value#v}"
+  value="${value//+/-}"
+  value="$(printf '%s' "$value" | sed -E 's/[^a-z0-9.-]+/-/g; s/^-+//; s/-+$//')"
+  [[ -n "$value" ]] || die "无法生成版本文件名：${1:-}"
+  printf 'v%s' "$value"
+}
+
+artifact_platform_label() {
+  case "$1" in
+    darwin-amd64) printf 'macos_x64' ;;
+    darwin-arm64) printf 'macos_arm64' ;;
+    windows-amd64) printf 'windows_x64' ;;
+    windows-arm64) printf 'windows_arm64' ;;
+    *)
+      die "不支持的产物平台标识：$1"
+      ;;
+  esac
+}
+
+artifact_platform_id_from_label() {
+  case "$1" in
+    macos_x64) printf 'darwin-amd64' ;;
+    macos_arm64) printf 'darwin-arm64' ;;
+    windows_x64) printf 'windows-amd64' ;;
+    windows_arm64) printf 'windows-arm64' ;;
+    *)
+      die "不支持的产物平台标签：$1"
+      ;;
+  esac
+}
+
 require_desktop_version() {
   local value
   value="$(trim_value "${OPENWATCHER_DESKTOP_VERSION:-}")"
