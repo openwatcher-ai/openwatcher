@@ -1,0 +1,335 @@
+event: status_snapshot
+id: status_snapshot-2026-06-03T100000Z
+data: {
+data:   "type": "status_snapshot",
+data:   "ok": true,
+data:   "observedAt": "2026-06-03T10:00:00Z",
+data:   "quota": {
+data:     "source": "oauth-api",
+data:     "fresh": true,
+data:     "status": "ok",
+data:     "planType": "pro",
+data:     "fiveHour": {
+data:       "usedPercent": 12,
+data:       "remainingPercent": 88,
+data:       "resetAt": 1780437338
+data:     },
+data:     "weekly": {
+data:       "usedPercent": 20,
+data:       "remainingPercent": 80,
+data:       "resetAt": 1780845860
+data:     }
+data:   },
+data:   "heatmap24h": {
+data:     "timezone": "UTC",
+data:     "generatedAt": "2026-06-03T10:00:00Z",
+data:     "peakHourStart": "2026-06-03T09:00:00Z",
+data:     "buckets": [
+data:       {
+data:         "hourStart": "2026-06-03T09:00:00Z",
+data:         "inputTokens": 120,
+data:         "cachedInputTokens": 20,
+data:         "outputTokens": 30,
+data:         "reasoningOutputTokens": 10,
+data:         "totalTokens": 150,
+data:         "activeThreads": 1
+data:       }
+data:     ]
+data:   },
+data:   "heatmap7d": {
+data:     "timezone": "",
+data:     "generatedAt": "0001-01-01T00:00:00Z",
+data:     "startDate": "",
+data:     "endDate": "",
+data:     "peakTokens": 0,
+data:     "days": null
+data:   },
+data:   "dailyUsage": {
+data:     "generatedAt": "2026-06-03T10:00:00Z",
+data:     "totalTokens": 150,
+data:     "inputTokens": 120,
+data:     "cachedInputTokens": 20,
+data:     "outputTokens": 30,
+data:     "reasoningOutputTokens": 10,
+data:     "activeSessions": 1,
+data:     "estimatedValueUsd": 0.0007,
+data:     "estimatedValueLabel": "$0.0007",
+data:     "pricingDate": "2026-06-03",
+data:     "pricingSourceUrl": "https://developers.openai.com/api/docs/pricing",
+data:     "pricingSource": "built-in-fallback",
+data:     "modelShares": [
+data:       {
+data:         "model": "gpt-5.4",
+data:         "tokens": 150,
+data:         "sharePercent": 100
+data:       }
+data:     ]
+data:   },
+data:   "dailyTrend30d": {
+data:     "timezone": "Asia/Shanghai",
+data:     "generatedAt": "2026-06-05T10:00:00Z",
+data:     "startDate": "2026-05-06",
+data:     "endDate": "2026-06-04",
+data:     "totalTokens": 465000,
+data:     "averageTokens": 15500,
+data:     "peakTokens": 30000,
+data:     "days": [
+data:       {
+data:         "date": "2026-05-06",
+data:         "totalTokens": 1000
+data:       },
+data:       {
+data:         "date": "2026-05-07",
+data:         "totalTokens": 2000
+data:       },
+data:       {
+data:         "date": "2026-05-08",
+data:         "totalTokens": 3000
+data:       },
+data:       {
+data:         "date": "2026-05-09",
+data:         "totalTokens": 4000
+data:       },
+data:       {
+data:         "date": "2026-05-10",
+data:         "totalTokens": 5000
+data:       },
+data:       {
+data:         "date": "2026-05-11",
+data:         "totalTokens": 6000
+data:       },
+data:       {
+data:         "date": "2026-05-12",
+data:         "totalTokens": 7000
+data:       },
+data:       {
+data:         "date": "2026-05-13",
+data:         "totalTokens": 8000
+data:       },
+data:       {
+data:         "date": "2026-05-14",
+data:         "totalTokens": 9000
+data:       },
+data:       {
+data:         "date": "2026-05-15",
+data:         "totalTokens": 10000
+data:       },
+data:       {
+data:         "date": "2026-05-16",
+data:         "totalTokens": 11000
+data:       },
+data:       {
+data:         "date": "2026-05-17",
+data:         "totalTokens": 12000
+data:       },
+data:       {
+data:         "date": "2026-05-18",
+data:         "totalTokens": 13000
+data:       },
+data:       {
+data:         "date": "2026-05-19",
+data:         "totalTokens": 14000
+data:       },
+data:       {
+data:         "date": "2026-05-20",
+data:         "totalTokens": 15000
+data:       },
+data:       {
+data:         "date": "2026-05-21",
+data:         "totalTokens": 16000
+data:       },
+data:       {
+data:         "date": "2026-05-22",
+data:         "totalTokens": 17000
+data:       },
+data:       {
+data:         "date": "2026-05-23",
+data:         "totalTokens": 18000
+data:       },
+data:       {
+data:         "date": "2026-05-24",
+data:         "totalTokens": 19000
+data:       },
+data:       {
+data:         "date": "2026-05-25",
+data:         "totalTokens": 20000
+data:       },
+data:       {
+data:         "date": "2026-05-26",
+data:         "totalTokens": 21000
+data:       },
+data:       {
+data:         "date": "2026-05-27",
+data:         "totalTokens": 22000
+data:       },
+data:       {
+data:         "date": "2026-05-28",
+data:         "totalTokens": 23000
+data:       },
+data:       {
+data:         "date": "2026-05-29",
+data:         "totalTokens": 24000
+data:       },
+data:       {
+data:         "date": "2026-05-30",
+data:         "totalTokens": 25000
+data:       },
+data:       {
+data:         "date": "2026-05-31",
+data:         "totalTokens": 26000
+data:       },
+data:       {
+data:         "date": "2026-06-01",
+data:         "totalTokens": 27000
+data:       },
+data:       {
+data:         "date": "2026-06-02",
+data:         "totalTokens": 28000
+data:       },
+data:       {
+data:         "date": "2026-06-03",
+data:         "totalTokens": 29000
+data:       },
+data:       {
+data:         "date": "2026-06-04",
+data:         "totalTokens": 30000
+data:       }
+data:     ],
+data:     "estimatedValueUsd": 2.12,
+data:     "estimatedValueLabel": "$2.12",
+data:     "pricingDate": "2026-06-03",
+data:     "pricingSourceUrl": "https://developers.openai.com/api/docs/pricing",
+data:     "pricingSource": "built-in-fallback"
+data:   },
+data:   "sessions": [
+data:     {
+data:       "threadId": "019e8943-36f6-73b2-8a7a-c30c3ecc0ef2",
+data:       "title": "session title",
+data:       "updatedAt": "2026-06-03T10:00:00Z",
+data:       "model": "gpt-5.4",
+data:       "reasoningEffort": "high",
+data:       "tokensUsedTotal": 5110579,
+data:       "contextUsedTokens": 187224,
+data:       "contextWindow": 920000,
+data:       "contextPressurePercent": 19,
+data:       "contextCompactThresholdTokens": 850000,
+data:       "contextCompactThresholdPercent": 92,
+data:       "lastActiveAgoMinutes": 12
+data:     }
+data:   ],
+data:   "errors": []
+data: }
+
+event: status_quota
+id: status_quota-2026-06-03T100000Z
+data: {
+data:   "type": "status_quota",
+data:   "observedAt": "2026-06-03T10:00:00Z",
+data:   "quota": {
+data:     "source": "oauth-api",
+data:     "fresh": true,
+data:     "status": "ok",
+data:     "planType": "pro",
+data:     "fiveHour": {
+data:       "usedPercent": 12,
+data:       "remainingPercent": 88,
+data:       "resetAt": 1780437338
+data:     },
+data:     "weekly": {
+data:       "usedPercent": 20,
+data:       "remainingPercent": 80,
+data:       "resetAt": 1780845860
+data:     }
+data:   }
+data: }
+
+event: status_heatmap24h
+id: status_heatmap24h-2026-06-03T100000Z
+data: {
+data:   "type": "status_heatmap24h",
+data:   "observedAt": "2026-06-03T10:00:00Z",
+data:   "heatmap24h": {
+data:     "timezone": "UTC",
+data:     "generatedAt": "2026-06-03T10:00:00Z",
+data:     "peakHourStart": "2026-06-03T09:00:00Z",
+data:     "buckets": [
+data:       {
+data:         "hourStart": "2026-06-03T09:00:00Z",
+data:         "inputTokens": 120,
+data:         "cachedInputTokens": 20,
+data:         "outputTokens": 30,
+data:         "reasoningOutputTokens": 10,
+data:         "totalTokens": 150,
+data:         "activeThreads": 1
+data:       }
+data:     ]
+data:   },
+data:   "heatmap7d": {
+data:     "timezone": "",
+data:     "generatedAt": "0001-01-01T00:00:00Z",
+data:     "startDate": "",
+data:     "endDate": "",
+data:     "peakTokens": 0,
+data:     "days": null
+data:   },
+data:   "dailyUsage": {
+data:     "generatedAt": "2026-06-03T10:00:00Z",
+data:     "totalTokens": 150,
+data:     "inputTokens": 120,
+data:     "cachedInputTokens": 20,
+data:     "outputTokens": 30,
+data:     "reasoningOutputTokens": 10,
+data:     "activeSessions": 1,
+data:     "estimatedValueUsd": 0.0007,
+data:     "estimatedValueLabel": "$0.0007",
+data:     "pricingDate": "2026-06-03",
+data:     "pricingSourceUrl": "https://developers.openai.com/api/docs/pricing",
+data:     "pricingSource": "built-in-fallback",
+data:     "modelShares": [
+data:       {
+data:         "model": "gpt-5.4",
+data:         "tokens": 150,
+data:         "sharePercent": 100
+data:       }
+data:     ]
+data:   }
+data: }
+
+event: status_sessions
+id: status_sessions-2026-06-03T100000Z
+data: {
+data:   "type": "status_sessions",
+data:   "observedAt": "2026-06-03T10:00:00Z",
+data:   "sessions": [
+data:     {
+data:       "threadId": "019e8943-36f6-73b2-8a7a-c30c3ecc0ef2",
+data:       "title": "session title",
+data:       "updatedAt": "2026-06-03T10:00:00Z",
+data:       "model": "gpt-5.4",
+data:       "reasoningEffort": "high",
+data:       "tokensUsedTotal": 5110579,
+data:       "contextUsedTokens": 187224,
+data:       "contextWindow": 920000,
+data:       "contextPressurePercent": 19,
+data:       "contextCompactThresholdTokens": 850000,
+data:       "contextCompactThresholdPercent": 92,
+data:       "lastActiveAgoMinutes": 12
+data:     }
+data:   ]
+data: }
+
+event: status_errors
+id: status_errors-2026-06-03T100000Z
+data: {
+data:   "type": "status_errors",
+data:   "observedAt": "2026-06-03T10:00:00Z",
+data:   "errors": []
+data: }
+
+event: heartbeat
+id: status_heartbeat-2026-06-03T100000Z
+data: {
+data:   "type": "heartbeat",
+data:   "createdAt": "2026-06-03T10:00:00Z"
+data: }
+

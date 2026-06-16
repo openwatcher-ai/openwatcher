@@ -1,0 +1,662 @@
+name: OpenWatcher Publish Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_version:
+        description: Runtime release version, for example vX.Y.Z-beta.N
+        required: true
+        type: string
+      desktop_min_version:
+        description: Minimum Desktop app version required by this runtime manifest
+        required: true
+        type: string
+      watch_version_name:
+        description: Watch APK versionName bundled into this Runtime Release
+        required: true
+        type: string
+      watch_version_code:
+        description: Watch APK versionCode bundled into this Runtime Release
+        required: true
+        type: string
+      platform_tools_version:
+        description: Android platform-tools version, for example 36.0.0
+        required: false
+        default: ""
+        type: string
+      platform_tools_url:
+        description: Optional platform-tools URL template, must contain {platform}
+        required: false
+        default: ""
+        type: string
+      cloudflared_version:
+        description: cloudflared release tag, for example 2026.6.0
+        required: false
+        default: ""
+        type: string
+      cloudflared_url:
+        description: Optional cloudflared URL template, must contain {platform}, {arch}, {ext}
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: openwatcher-publish-runtime-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  OPENWATCHER_GITHUB_REPOSITORY: ${{ github.repository }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      runtime_tag: ${{ steps.plan.outputs.runtime_tag }}
+      runtime_slug: ${{ steps.plan.outputs.runtime_slug }}
+      desktop_version: ${{ steps.plan.outputs.desktop_version }}
+      watch_version_name: ${{ steps.plan.outputs.watch_version_name }}
+      watch_version_code: ${{ steps.plan.outputs.watch_version_code }}
+      built_at: ${{ steps.plan.outputs.built_at }}
+      commit_full: ${{ steps.plan.outputs.commit_full }}
+      commit_short: ${{ steps.plan.outputs.commit_short }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          [[ "${GITHUB_REF_NAME}" == "main" ]] || {
+            echo "publish-runtime 只能从 main 手动触发，当前分支：${GITHUB_REF_NAME}" >&2
+            exit 1
+          }
+
+          platform_tools_version="$(printf '%s' '${{ inputs.platform_tools_version }}' | xargs)"
+          platform_tools_url="$(printf '%s' '${{ inputs.platform_tools_url }}' | xargs)"
+          cloudflared_version="$(printf '%s' '${{ inputs.cloudflared_version }}' | xargs)"
+          cloudflared_url="$(printf '%s' '${{ inputs.cloudflared_url }}' | xargs)"
+
+          if [[ -n "$platform_tools_version" && -n "$platform_tools_url" ]]; then
+            echo "platform_tools_version 和 platform_tools_url 只能二选一" >&2
+            exit 1
+          fi
+          if [[ -z "$platform_tools_version" && -z "$platform_tools_url" ]]; then
+            echo "必须提供 platform_tools_version 或 platform_tools_url" >&2
+            exit 1
+          fi
+          if [[ -n "$cloudflared_version" && -n "$cloudflared_url" ]]; then
+            echo "cloudflared_version 和 cloudflared_url 只能二选一" >&2
+            exit 1
+          fi
+          if [[ -z "$cloudflared_version" && -z "$cloudflared_url" ]]; then
+            echo "必须提供 cloudflared_version 或 cloudflared_url" >&2
+            exit 1
+          fi
+
+          raw_runtime='${{ inputs.runtime_version }}'
+          runtime_slug="$(printf '%s' "$raw_runtime" | tr '[:upper:]' '[:lower:]')"
+          [[ "$runtime_slug" == v* ]] || runtime_slug="v$runtime_slug"
+          [[ "$runtime_slug" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9a-z]+)*$ ]] || {
+            echo "runtime_version 不符合版本规则：$raw_runtime" >&2
+            exit 1
+          }
+
+          runtime_tag="runtime-${runtime_slug}"
+          desktop_version="$(printf '%s' '${{ inputs.desktop_min_version }}' | xargs)"
+          watch_version_name="$(printf '%s' '${{ inputs.watch_version_name }}' | xargs)"
+          watch_version_code="$(printf '%s' '${{ inputs.watch_version_code }}' | xargs)"
+          built_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          commit_full="$(git rev-parse HEAD)"
+          commit_short="$(git rev-parse --short HEAD)"
+
+          [[ "$desktop_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z][0-9A-Za-z.+-]*)?$ ]] || {
+            echo "desktop_min_version 不符合版本规则：$desktop_version" >&2
+            exit 1
+          }
+          [[ "$watch_version_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z][0-9A-Za-z.+-]*)?$ ]] || {
+            echo "watch_version_name 不符合版本规则：$watch_version_name" >&2
+            exit 1
+          }
+          [[ "$watch_version_code" =~ ^[1-9][0-9]*$ ]] || {
+            echo "watch_version_code 必须是正整数：$watch_version_code" >&2
+            exit 1
+          }
+
+          {
+            echo "runtime_tag=$runtime_tag"
+            echo "runtime_slug=${runtime_slug#v}"
+            echo "desktop_version=$desktop_version"
+            echo "watch_version_name=$watch_version_name"
+            echo "watch_version_code=$watch_version_code"
+            echo "built_at=$built_at"
+            echo "commit_full=$commit_full"
+            echo "commit_short=$commit_short"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Runtime 发布计划"
+            echo "- Runtime 标签：$runtime_tag"
+            echo "- Desktop 最低版本：$desktop_version"
+            echo "- Watch 版本：$watch_version_name ($watch_version_code)"
+            echo "- Commit：$commit_short"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  preflight-tests:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 安装 Android SDK 组件
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/android-sdk}}"
+          mkdir -p "$sdk_root"
+
+          sdkmanager_bin="$(
+            {
+              find "$sdk_root/cmdline-tools" -type f -path '*/bin/sdkmanager' 2>/dev/null || true
+              command -v sdkmanager 2>/dev/null || true
+            } | sort | tail -1
+          )"
+
+          if [[ -z "$sdkmanager_bin" || ! -x "$sdkmanager_bin" ]]; then
+            tools_zip="$RUNNER_TEMP/commandlinetools-linux.zip"
+            tools_extract="$RUNNER_TEMP/android-cmdline-tools"
+            curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip" -o "$tools_zip"
+            rm -rf "$tools_extract" "$sdk_root/cmdline-tools/latest"
+            mkdir -p "$tools_extract" "$sdk_root/cmdline-tools"
+            unzip -q "$tools_zip" -d "$tools_extract"
+            mv "$tools_extract/cmdline-tools" "$sdk_root/cmdline-tools/latest"
+            sdkmanager_bin="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          set +o pipefail
+          yes | "$sdkmanager_bin" --sdk_root="$sdk_root" --licenses >/dev/null
+          set -o pipefail
+          "$sdkmanager_bin" --sdk_root="$sdk_root" --install "platforms;android-35" "build-tools;35.0.0"
+
+          {
+            echo "ANDROID_SDK_ROOT=$sdk_root"
+            echo "ANDROID_HOME=$sdk_root"
+          } >> "$GITHUB_ENV"
+
+      - name: 安装 ripgrep
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+
+      - name: 运行 OpenWatcher preflight
+        shell: bash
+        run: scripts/test-openwatcher-preflight.sh
+
+  build-runtime-release:
+    needs:
+      - prepare
+      - preflight-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: 准备系统依赖
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq zip unzip
+
+      - name: 安装 Android SDK 组件
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/android-sdk}}"
+          mkdir -p "$sdk_root"
+
+          sdkmanager_bin="$(
+            {
+              find "$sdk_root/cmdline-tools" -type f -path '*/bin/sdkmanager' 2>/dev/null || true
+              command -v sdkmanager 2>/dev/null || true
+            } | sort | tail -1
+          )"
+
+          if [[ -z "$sdkmanager_bin" || ! -x "$sdkmanager_bin" ]]; then
+            tools_zip="$RUNNER_TEMP/commandlinetools-linux.zip"
+            tools_extract="$RUNNER_TEMP/android-cmdline-tools"
+            curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip" -o "$tools_zip"
+            rm -rf "$tools_extract" "$sdk_root/cmdline-tools/latest"
+            mkdir -p "$tools_extract" "$sdk_root/cmdline-tools"
+            unzip -q "$tools_zip" -d "$tools_extract"
+            mv "$tools_extract/cmdline-tools" "$sdk_root/cmdline-tools/latest"
+            sdkmanager_bin="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          set +o pipefail
+          yes | "$sdkmanager_bin" --sdk_root="$sdk_root" --licenses >/dev/null
+          set -o pipefail
+          "$sdkmanager_bin" --sdk_root="$sdk_root" --install "platforms;android-35" "build-tools;35.0.0"
+
+          {
+            echo "ANDROID_SDK_ROOT=$sdk_root"
+            echo "ANDROID_HOME=$sdk_root"
+          } >> "$GITHUB_ENV"
+
+      - name: 还原 watch release 签名材料
+        shell: bash
+        env:
+          OPENWATCHER_WATCH_KEYSTORE_BASE64: ${{ secrets.OPENWATCHER_WATCH_KEYSTORE_BASE64 }}
+          OPENWATCHER_WATCH_STORE_PASSWORD: ${{ secrets.OPENWATCHER_WATCH_STORE_PASSWORD }}
+          OPENWATCHER_WATCH_KEY_ALIAS: ${{ secrets.OPENWATCHER_WATCH_KEY_ALIAS }}
+          OPENWATCHER_WATCH_KEY_PASSWORD: ${{ secrets.OPENWATCHER_WATCH_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p watch-app/signing
+          printf '%s' "$OPENWATCHER_WATCH_KEYSTORE_BASE64" | base64 --decode > watch-app/signing/openwatcher-release.keystore
+          cat > watch-app/signing/release.properties <<EOF
+          storeFile=signing/openwatcher-release.keystore
+          storePassword=$OPENWATCHER_WATCH_STORE_PASSWORD
+          keyAlias=$OPENWATCHER_WATCH_KEY_ALIAS
+          keyPassword=$OPENWATCHER_WATCH_KEY_PASSWORD
+          EOF
+
+      - name: 构建 runtime 随附 watch release APK
+        shell: bash
+        env:
+          RELEASE_SUMMARY: Runtime 资源包随附 Watch 安装包，用于 Desktop 首次安装和离线资源准备。
+          OPENWATCHER_RELEASE_CHANNEL: beta
+          OPENWATCHER_CHANGELOG_URL: https://openwatcher.ai/changelog.json
+          OPENWATCHER_WATCH_VERSION_NAME: ${{ needs.prepare.outputs.watch_version_name }}
+          OPENWATCHER_WATCH_VERSION_CODE: ${{ needs.prepare.outputs.watch_version_code }}
+        run: |
+          set -euo pipefail
+          scripts/package-watch-release.sh "${{ needs.prepare.outputs.runtime_tag }}"
+
+      - name: 生成 Runtime Release 资产
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ needs.prepare.outputs.runtime_tag }}
+          RUNTIME_SLUG: ${{ needs.prepare.outputs.runtime_slug }}
+          DESKTOP_VERSION: ${{ needs.prepare.outputs.desktop_version }}
+          BUILT_AT: ${{ needs.prepare.outputs.built_at }}
+          COMMIT_FULL: ${{ needs.prepare.outputs.commit_full }}
+          COMMIT_SHORT: ${{ needs.prepare.outputs.commit_short }}
+          PLATFORM_TOOLS_VERSION: ${{ inputs.platform_tools_version }}
+          PLATFORM_TOOLS_URL: ${{ inputs.platform_tools_url }}
+          CLOUDFLARED_VERSION: ${{ inputs.cloudflared_version }}
+          CLOUDFLARED_URL: ${{ inputs.cloudflared_url }}
+          REPOSITORY_NAME: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          import subprocess
+          import urllib.request
+          import zipfile
+          from pathlib import Path
+
+          repo = os.environ["REPOSITORY_NAME"]
+          runtime_tag = os.environ["RUNTIME_TAG"]
+          runtime_slug = os.environ["RUNTIME_SLUG"]
+          desktop_version = os.environ["DESKTOP_VERSION"]
+          built_at = os.environ["BUILT_AT"]
+          commit_full = os.environ["COMMIT_FULL"]
+          commit_short = os.environ["COMMIT_SHORT"]
+          platform_tools_version = os.environ["PLATFORM_TOOLS_VERSION"].strip()
+          platform_tools_url = os.environ["PLATFORM_TOOLS_URL"].strip()
+          cloudflared_version = os.environ["CLOUDFLARED_VERSION"].strip()
+          cloudflared_url = os.environ["CLOUDFLARED_URL"].strip()
+
+          output_dir = Path("dist/runtime-release")
+          work_dir = Path(".tmp/runtime-release")
+          shutil.rmtree(output_dir, ignore_errors=True)
+          shutil.rmtree(work_dir, ignore_errors=True)
+          output_dir.mkdir(parents=True, exist_ok=True)
+          work_dir.mkdir(parents=True, exist_ok=True)
+
+          def run_text(cmd):
+            return subprocess.check_output(cmd, text=True).strip()
+
+          def download(url: str, target: Path) -> Path:
+            with urllib.request.urlopen(url) as response:
+              target.write_bytes(response.read())
+            return target
+
+          def sha256(path: Path) -> str:
+            digest = hashlib.sha256()
+            with path.open("rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+            return digest.hexdigest()
+
+          def size(path: Path) -> int:
+            return path.stat().st_size
+
+          def github_asset(tag: str, name: str) -> str:
+            return f"https://github.com/{repo}/releases/download/{tag}/{name}"
+
+          watch_metadata_path = Path("dist/latest-apk.json")
+          if not watch_metadata_path.is_file():
+            raise SystemExit("缺少 dist/latest-apk.json，无法为 runtime manifest 关联 watch APK")
+          watch_component = json.loads(watch_metadata_path.read_text(encoding="utf-8"))
+          watch_artifact_name = watch_component.get("artifact")
+          if not watch_artifact_name:
+            raise SystemExit("dist/latest-apk.json 缺少 artifact 字段")
+          built_watch_apk_path = Path("dist") / watch_artifact_name
+          if not built_watch_apk_path.is_file():
+            raise SystemExit(f"缺少 watch APK 资产：{built_watch_apk_path}")
+          watch_apk_path = output_dir / watch_artifact_name
+          shutil.copyfile(built_watch_apk_path, watch_apk_path)
+          watch_sha = sha256(watch_apk_path)
+          expected_watch_sha = watch_component.get("sha256")
+          if expected_watch_sha and expected_watch_sha != watch_sha:
+            raise SystemExit("watch APK sha256 与 latest-apk.json 不一致")
+
+          if platform_tools_version:
+            platform_urls = {
+              "windows": f"https://dl.google.com/android/repository/platform-tools_r{platform_tools_version}-win.zip",
+              "darwin": f"https://dl.google.com/android/repository/platform-tools_r{platform_tools_version}-darwin.zip",
+            }
+          else:
+            if "{platform}" not in platform_tools_url:
+              raise SystemExit("platform_tools_url 必须包含 {platform} 占位符")
+            platform_urls = {
+              "windows": platform_tools_url.replace("{platform}", "windows"),
+              "darwin": platform_tools_url.replace("{platform}", "darwin"),
+            }
+
+          def platform_tools_revision(path: Path) -> str:
+            with zipfile.ZipFile(path) as archive:
+              content = archive.read("platform-tools/source.properties").decode("utf-8")
+            for line in content.splitlines():
+              if line.startswith("Pkg.Revision="):
+                return line.split("=", 1)[1].strip()
+            raise SystemExit(f"无法从 {path.name} 读取 platform-tools 版本")
+
+          windows_zip = download(platform_urls["windows"], work_dir / "platform-tools-windows.zip")
+          darwin_zip = download(platform_urls["darwin"], work_dir / "platform-tools-darwin.zip")
+          platform_version_windows = platform_tools_revision(windows_zip)
+          platform_version_darwin = platform_tools_revision(darwin_zip)
+
+          shutil.copyfile(windows_zip, output_dir / "platform-tools-windows-amd64.zip")
+          shutil.copyfile(windows_zip, output_dir / "platform-tools-windows-arm64.zip")
+          shutil.copyfile(darwin_zip, output_dir / "platform-tools-darwin-amd64.zip")
+          shutil.copyfile(darwin_zip, output_dir / "platform-tools-darwin-arm64.zip")
+
+          if cloudflared_version:
+            tags_to_try = [cloudflared_version]
+            if cloudflared_version.startswith("v"):
+              tags_to_try.append(cloudflared_version[1:])
+
+            release = None
+            for tag in tags_to_try:
+              try:
+                release = json.loads(run_text(["gh", "api", f"repos/cloudflare/cloudflared/releases/tags/{tag}"]))
+                break
+              except subprocess.CalledProcessError:
+                continue
+            if release is None:
+              raise SystemExit(f"找不到 cloudflared release tag：{cloudflared_version}")
+            assets = {asset["name"]: asset["browser_download_url"] for asset in release.get("assets", [])}
+
+            def asset_url(name: str) -> str:
+              if name in assets:
+                return assets[name]
+              raise SystemExit(f"cloudflared release 缺少资产：{name}")
+
+            cloudflared_sources = {
+              "windows-amd64": asset_url("cloudflared-windows-amd64.exe"),
+              "windows-arm64": assets.get("cloudflared-windows-arm64.exe", assets.get("cloudflared-windows-amd64.exe")),
+              "darwin-amd64": asset_url("cloudflared-darwin-amd64.tgz"),
+              "darwin-arm64": asset_url("cloudflared-darwin-arm64.tgz"),
+            }
+            if not cloudflared_sources["windows-arm64"]:
+              raise SystemExit("cloudflared release 缺少 windows-arm64.exe，且无法回退到 windows-amd64.exe")
+          else:
+            required = ("{platform}", "{arch}", "{ext}")
+            if any(token not in cloudflared_url for token in required):
+              raise SystemExit("cloudflared_url 必须包含 {platform}、{arch}、{ext} 占位符")
+            cloudflared_sources = {
+              "windows-amd64": cloudflared_url.replace("{platform}", "windows").replace("{arch}", "amd64").replace("{ext}", ".exe"),
+              "windows-arm64": cloudflared_url.replace("{platform}", "windows").replace("{arch}", "arm64").replace("{ext}", ".exe"),
+              "darwin-amd64": cloudflared_url.replace("{platform}", "darwin").replace("{arch}", "amd64").replace("{ext}", ".tgz"),
+              "darwin-arm64": cloudflared_url.replace("{platform}", "darwin").replace("{arch}", "arm64").replace("{ext}", ".tgz"),
+            }
+
+          downloaded_cloudflared = {}
+          for platform, url in cloudflared_sources.items():
+            suffix = ".exe" if platform.startswith("windows-") else ".tgz"
+            downloaded_cloudflared[platform] = download(url, work_dir / f"{platform}{suffix}")
+
+          for platform in ("windows-amd64", "windows-arm64"):
+            source = downloaded_cloudflared[platform]
+            target = output_dir / f"cloudflared-{platform}.zip"
+            with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+              archive.write(source, arcname="cloudflared.exe")
+
+          shutil.copyfile(downloaded_cloudflared["darwin-amd64"], output_dir / "cloudflared-darwin-amd64.tgz")
+          shutil.copyfile(downloaded_cloudflared["darwin-arm64"], output_dir / "cloudflared-darwin-arm64.tgz")
+
+          cloudflared_resource_version = cloudflared_version or "custom-url"
+
+          resources = {
+            "watchApk": {
+              "version": f"{watch_component['versionName']}+{watch_component['versionCode']}",
+              "versionName": watch_component["versionName"],
+              "versionCode": watch_component["versionCode"],
+              "artifact": watch_apk_path.name,
+              "url": github_asset(runtime_tag, watch_apk_path.name),
+              "sha256": watch_sha,
+              "sizeBytes": size(watch_apk_path),
+            },
+            "platformTools": {
+              "windows-amd64": {
+                "version": platform_version_windows,
+                "artifact": "platform-tools-windows-amd64.zip",
+                "url": github_asset(runtime_tag, "platform-tools-windows-amd64.zip"),
+                "sha256": sha256(output_dir / "platform-tools-windows-amd64.zip"),
+                "sizeBytes": size(output_dir / "platform-tools-windows-amd64.zip"),
+                "archiveKind": "zip",
+                "binRelativePath": "platform-tools/adb.exe",
+                "extraFiles": ["platform-tools/AdbWinApi.dll", "platform-tools/AdbWinUsbApi.dll"],
+              },
+              "windows-arm64": {
+                "version": platform_version_windows,
+                "artifact": "platform-tools-windows-arm64.zip",
+                "url": github_asset(runtime_tag, "platform-tools-windows-arm64.zip"),
+                "sha256": sha256(output_dir / "platform-tools-windows-arm64.zip"),
+                "sizeBytes": size(output_dir / "platform-tools-windows-arm64.zip"),
+                "archiveKind": "zip",
+                "binRelativePath": "platform-tools/adb.exe",
+                "extraFiles": ["platform-tools/AdbWinApi.dll", "platform-tools/AdbWinUsbApi.dll"],
+              },
+              "darwin-amd64": {
+                "version": platform_version_darwin,
+                "artifact": "platform-tools-darwin-amd64.zip",
+                "url": github_asset(runtime_tag, "platform-tools-darwin-amd64.zip"),
+                "sha256": sha256(output_dir / "platform-tools-darwin-amd64.zip"),
+                "sizeBytes": size(output_dir / "platform-tools-darwin-amd64.zip"),
+                "archiveKind": "zip",
+                "binRelativePath": "platform-tools/adb",
+              },
+              "darwin-arm64": {
+                "version": platform_version_darwin,
+                "artifact": "platform-tools-darwin-arm64.zip",
+                "url": github_asset(runtime_tag, "platform-tools-darwin-arm64.zip"),
+                "sha256": sha256(output_dir / "platform-tools-darwin-arm64.zip"),
+                "sizeBytes": size(output_dir / "platform-tools-darwin-arm64.zip"),
+                "archiveKind": "zip",
+                "binRelativePath": "platform-tools/adb",
+              },
+            },
+            "cloudflared": {
+              "windows-amd64": {
+                "version": cloudflared_resource_version,
+                "artifact": "cloudflared-windows-amd64.zip",
+                "url": github_asset(runtime_tag, "cloudflared-windows-amd64.zip"),
+                "sha256": sha256(output_dir / "cloudflared-windows-amd64.zip"),
+                "sizeBytes": size(output_dir / "cloudflared-windows-amd64.zip"),
+                "archiveKind": "zip",
+                "binRelativePath": "cloudflared.exe",
+              },
+              "windows-arm64": {
+                "version": cloudflared_resource_version,
+                "artifact": "cloudflared-windows-arm64.zip",
+                "url": github_asset(runtime_tag, "cloudflared-windows-arm64.zip"),
+                "sha256": sha256(output_dir / "cloudflared-windows-arm64.zip"),
+                "sizeBytes": size(output_dir / "cloudflared-windows-arm64.zip"),
+                "archiveKind": "zip",
+                "binRelativePath": "cloudflared.exe",
+              },
+              "darwin-amd64": {
+                "version": cloudflared_resource_version,
+                "artifact": "cloudflared-darwin-amd64.tgz",
+                "url": github_asset(runtime_tag, "cloudflared-darwin-amd64.tgz"),
+                "sha256": sha256(output_dir / "cloudflared-darwin-amd64.tgz"),
+                "sizeBytes": size(output_dir / "cloudflared-darwin-amd64.tgz"),
+                "archiveKind": "tgz",
+                "binRelativePath": "cloudflared",
+              },
+              "darwin-arm64": {
+                "version": cloudflared_resource_version,
+                "artifact": "cloudflared-darwin-arm64.tgz",
+                "url": github_asset(runtime_tag, "cloudflared-darwin-arm64.tgz"),
+                "sha256": sha256(output_dir / "cloudflared-darwin-arm64.tgz"),
+                "sizeBytes": size(output_dir / "cloudflared-darwin-arm64.tgz"),
+                "archiveKind": "tgz",
+                "binRelativePath": "cloudflared",
+              },
+            },
+          }
+
+          manifest = {
+            "schemaVersion": 1,
+            "channel": "runtime",
+            "generatedAt": built_at,
+            "releaseSlug": runtime_slug,
+            "desktopMinVersion": desktop_version,
+            "sourceCommit": commit_full,
+            "resources": resources,
+            "notes": f"runtime release {runtime_slug}; watch APK built from current commit {commit_short}.",
+          }
+          (output_dir / "runtime-manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+          )
+
+          checksum_lines = []
+          for path in sorted(output_dir.iterdir()):
+            if not path.is_file() or path.name == "runtime-checksums.txt":
+              continue
+            checksum_lines.append(f"{sha256(path)}  {path.name}")
+          (output_dir / "runtime-checksums.txt").write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: 校验 Runtime Release 资产
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -f dist/runtime-release/runtime-manifest.json ]] || { echo "缺少 runtime-manifest.json" >&2; exit 1; }
+          [[ -f dist/runtime-release/runtime-checksums.txt ]] || { echo "缺少 runtime-checksums.txt" >&2; exit 1; }
+          find dist/runtime-release -maxdepth 1 -type f | grep -Eq 'platform-tools-.*\.zip$' || { echo "缺少 platform-tools 资产" >&2; exit 1; }
+          find dist/runtime-release -maxdepth 1 -type f | grep -Eq 'cloudflared-.*\.(zip|tgz)$' || { echo "缺少 cloudflared 资产" >&2; exit 1; }
+          find dist/runtime-release -maxdepth 1 -type f | grep -Eq '\.apk$' || { echo "缺少 watch APK 资产" >&2; exit 1; }
+          if rg -n 'runtime-stable|watch-beta-stable|current/' dist/runtime-release/runtime-manifest.json; then
+            echo "runtime-manifest.json 仍包含旧稳定标签或 current 指针" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: runtime-release-bundle
+          path: dist/runtime-release/*
+          if-no-files-found: error
+
+  publish-runtime-release:
+    needs:
+      - prepare
+      - build-runtime-release
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: runtime-release-bundle
+          path: dist/runtime-release
+
+      - name: 创建或更新 Runtime GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ needs.prepare.outputs.runtime_tag }}
+          RUNTIME_SLUG: ${{ needs.prepare.outputs.runtime_slug }}
+          PLATFORM_TOOLS_VERSION: ${{ inputs.platform_tools_version }}
+          PLATFORM_TOOLS_URL: ${{ inputs.platform_tools_url }}
+          CLOUDFLARED_VERSION: ${{ inputs.cloudflared_version }}
+          CLOUDFLARED_URL: ${{ inputs.cloudflared_url }}
+        run: |
+          set -euo pipefail
+
+          notes_file="$RUNNER_TEMP/openwatcher-runtime-notes.md"
+          {
+            echo "# OpenWatcher Runtime ${RUNTIME_TAG}"
+            echo
+            echo "- releaseSlug: ${RUNTIME_SLUG}"
+            echo "- platformToolsVersion: ${PLATFORM_TOOLS_VERSION:-custom-url}"
+            echo "- platformToolsUrlTemplate: ${PLATFORM_TOOLS_URL:-n/a}"
+            echo "- cloudflaredVersion: ${CLOUDFLARED_VERSION:-custom-url}"
+            echo "- cloudflaredUrlTemplate: ${CLOUDFLARED_URL:-n/a}"
+            echo
+            echo "Assets include runtime-manifest.json and runtime-checksums.txt."
+          } > "$notes_file"
+
+          if gh release view "$RUNTIME_TAG" >/dev/null 2>&1; then
+            gh release edit "$RUNTIME_TAG" --title "OpenWatcher Runtime ${RUNTIME_TAG}" --notes-file "$notes_file" >/dev/null
+          else
+            gh release create "$RUNTIME_TAG" --title "OpenWatcher Runtime ${RUNTIME_TAG}" --notes-file "$notes_file" >/dev/null
+          fi
+
+          while IFS= read -r -d '' file; do
+            gh release upload "$RUNTIME_TAG" "$file" --clobber >/dev/null
+          done < <(find dist/runtime-release -maxdepth 1 -type f -print0)

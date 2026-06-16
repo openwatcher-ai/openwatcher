@@ -1,0 +1,13 @@
+{
+  "name": "openwatcher-desktop-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "node --test src/*.test.mjs",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.8"
+  }
+}

@@ -1,0 +1,218 @@
+{
+  "ok": true,
+  "observedAt": "2026-06-03T10:00:00Z",
+  "quota": {
+    "source": "oauth-api",
+    "fresh": true,
+    "status": "ok",
+    "planType": "pro",
+    "fiveHour": {
+      "usedPercent": 12,
+      "remainingPercent": 88,
+      "resetAt": 1780437338
+    },
+    "weekly": {
+      "usedPercent": 20,
+      "remainingPercent": 80,
+      "resetAt": 1780845860
+    }
+  },
+  "heatmap24h": {
+    "timezone": "UTC",
+    "generatedAt": "2026-06-03T10:00:00Z",
+    "peakHourStart": "2026-06-03T09:00:00Z",
+    "buckets": [
+      {
+        "hourStart": "2026-06-03T09:00:00Z",
+        "inputTokens": 120,
+        "cachedInputTokens": 20,
+        "outputTokens": 30,
+        "reasoningOutputTokens": 10,
+        "totalTokens": 150,
+        "activeThreads": 1
+      }
+    ]
+  },
+  "heatmap7d": {
+    "timezone": "",
+    "generatedAt": "0001-01-01T00:00:00Z",
+    "startDate": "",
+    "endDate": "",
+    "peakTokens": 0,
+    "days": null
+  },
+  "dailyUsage": {
+    "generatedAt": "2026-06-03T10:00:00Z",
+    "totalTokens": 150,
+    "inputTokens": 120,
+    "cachedInputTokens": 20,
+    "outputTokens": 30,
+    "reasoningOutputTokens": 10,
+    "activeSessions": 1,
+    "estimatedValueUsd": 0.0007,
+    "estimatedValueLabel": "$0.0007",
+    "pricingDate": "2026-06-03",
+    "pricingSourceUrl": "https://developers.openai.com/api/docs/pricing",
+    "pricingSource": "built-in-fallback",
+    "modelShares": [
+      {
+        "model": "gpt-5.4",
+        "tokens": 150,
+        "sharePercent": 100
+      }
+    ]
+  },
+  "dailyTrend30d": {
+    "timezone": "Asia/Shanghai",
+    "generatedAt": "2026-06-05T10:00:00Z",
+    "startDate": "2026-05-06",
+    "endDate": "2026-06-04",
+    "totalTokens": 465000,
+    "averageTokens": 15500,
+    "peakTokens": 30000,
+    "days": [
+      {
+        "date": "2026-05-06",
+        "totalTokens": 1000
+      },
+      {
+        "date": "2026-05-07",
+        "totalTokens": 2000
+      },
+      {
+        "date": "2026-05-08",
+        "totalTokens": 3000
+      },
+      {
+        "date": "2026-05-09",
+        "totalTokens": 4000
+      },
+      {
+        "date": "2026-05-10",
+        "totalTokens": 5000
+      },
+      {
+        "date": "2026-05-11",
+        "totalTokens": 6000
+      },
+      {
+        "date": "2026-05-12",
+        "totalTokens": 7000
+      },
+      {
+        "date": "2026-05-13",
+        "totalTokens": 8000
+      },
+      {
+        "date": "2026-05-14",
+        "totalTokens": 9000
+      },
+      {
+        "date": "2026-05-15",
+        "totalTokens": 10000
+      },
+      {
+        "date": "2026-05-16",
+        "totalTokens": 11000
+      },
+      {
+        "date": "2026-05-17",
+        "totalTokens": 12000
+      },
+      {
+        "date": "2026-05-18",
+        "totalTokens": 13000
+      },
+      {
+        "date": "2026-05-19",
+        "totalTokens": 14000
+      },
+      {
+        "date": "2026-05-20",
+        "totalTokens": 15000
+      },
+      {
+        "date": "2026-05-21",
+        "totalTokens": 16000
+      },
+      {
+        "date": "2026-05-22",
+        "totalTokens": 17000
+      },
+      {
+        "date": "2026-05-23",
+        "totalTokens": 18000
+      },
+      {
+        "date": "2026-05-24",
+        "totalTokens": 19000
+      },
+      {
+        "date": "2026-05-25",
+        "totalTokens": 20000
+      },
+      {
+        "date": "2026-05-26",
+        "totalTokens": 21000
+      },
+      {
+        "date": "2026-05-27",
+        "totalTokens": 22000
+      },
+      {
+        "date": "2026-05-28",
+        "totalTokens": 23000
+      },
+      {
+        "date": "2026-05-29",
+        "totalTokens": 24000
+      },
+      {
+        "date": "2026-05-30",
+        "totalTokens": 25000
+      },
+      {
+        "date": "2026-05-31",
+        "totalTokens": 26000
+      },
+      {
+        "date": "2026-06-01",
+        "totalTokens": 27000
+      },
+      {
+        "date": "2026-06-02",
+        "totalTokens": 28000
+      },
+      {
+        "date": "2026-06-03",
+        "totalTokens": 29000
+      },
+      {
+        "date": "2026-06-04",
+        "totalTokens": 30000
+      }
+    ],
+    "estimatedValueUsd": 2.12,
+    "estimatedValueLabel": "$2.12",
+    "pricingDate": "2026-06-03",
+    "pricingSourceUrl": "https://developers.openai.com/api/docs/pricing",
+    "pricingSource": "built-in-fallback"
+  },
+  "sessions": [
+    {
+      "threadId": "019e8943-36f6-73b2-8a7a-c30c3ecc0ef2",
+      "title": "session title",
+      "updatedAt": "2026-06-03T10:00:00Z",
+      "model": "gpt-5.4",
+      "reasoningEffort": "high",
+      "tokensUsedTotal": 5110579,
+      "contextUsedTokens": 187224,
+      "contextWindow": 920000,
+      "contextPressurePercent": 19,
+      "contextCompactThresholdTokens": 850000,
+      "contextCompactThresholdPercent": 92,
+      "lastActiveAgoMinutes": 12
+    }
+  ],
+  "errors": []
+}

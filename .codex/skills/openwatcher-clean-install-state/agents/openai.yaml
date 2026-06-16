@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenWatcher 清理测试环境"
+  short_description: "备份配置并清理 OpenWatcher 本机安装状态。"
+  default_prompt: "使用 $openwatcher-clean-install-state 备份 ~/.openwatcher 并清理 OpenWatcher 本机安装状态。"

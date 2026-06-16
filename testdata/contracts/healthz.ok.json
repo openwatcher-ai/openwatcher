@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "build": {
+    "version": "dev",
+    "commit": "contract",
+    "builtAt": "2026-06-10T15:00:00Z"
+  },
+  "config": {
+    "listen": "127.0.0.1:8787",
+    "publicBaseUrl": "http://192.168.1.12:8787",
+    "pairingSlot": "beta",
+    "paired": true,
+    "noAuth": false
+  },
+  "codex": {
+    "homeDetected": true,
+    "authDetected": true,
+    "sessionsDetected": true
+  }
+}

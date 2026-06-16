@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "OpenWatcher",
+  "outputfilename": "openwatcher",
+  "preBuildHooks": {
+    "*/*": "go run ../../cmd/prebuildclean"
+  },
+  "postBuildHooks": {
+    "darwin/*": "go run ../../cmd/syncbundle ${bin}",
+    "windows/*": "go run ../../cmd/syncbundle ${bin}"
+  },
+  "frontend:dir": "frontend-vue3",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto"
+}

@@ -1,0 +1,664 @@
+name: OpenWatcher Publish Beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_scope:
+        description: 发布范围，决定本次真正更新哪些组件事实
+        required: true
+        type: choice
+        options:
+          - full
+          - desktop
+          - watch
+          - runtime-pointer
+          - docs
+          - compatibility
+          - metadata
+      release_summary:
+        description: Release summary shown in GitHub Release notes and beta channel manifest
+        required: true
+        type: string
+      desktop_version:
+        description: Desktop app version, required for full or desktop scope
+        required: false
+        default: ""
+        type: string
+      watch_version_name:
+        description: Watch APK versionName, required for full or watch scope
+        required: false
+        default: ""
+        type: string
+      watch_version_code:
+        description: Watch APK versionCode, required for full or watch scope
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: openwatcher-publish-beta-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  OPENWATCHER_GITHUB_REPOSITORY: ${{ github.repository }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_tag: ${{ steps.plan.outputs.release_tag }}
+      release_scope: ${{ steps.plan.outputs.release_scope }}
+      runtime_tag: ${{ steps.plan.outputs.runtime_tag }}
+      runtime_manifest_url: ${{ steps.plan.outputs.runtime_manifest_url }}
+      runtime_manifest_sha256: ${{ steps.plan.outputs.runtime_manifest_sha256 }}
+      desktop_version: ${{ steps.plan.outputs.desktop_version }}
+      watch_version_name: ${{ steps.plan.outputs.watch_version_name }}
+      watch_version_code: ${{ steps.plan.outputs.watch_version_code }}
+      built_at: ${{ steps.plan.outputs.built_at }}
+      commit_full: ${{ steps.plan.outputs.commit_full }}
+      commit_short: ${{ steps.plan.outputs.commit_short }}
+      previous_release_manifest_url: ${{ steps.plan.outputs.previous_release_manifest_url }}
+      previous_release_tag: ${{ steps.plan.outputs.previous_release_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          [[ "${GITHUB_REF_NAME}" == "main" ]] || {
+            echo "publish-beta 只能从 main 手动触发，当前分支：${GITHUB_REF_NAME}" >&2
+            exit 1
+          }
+
+          release_scope='${{ inputs.release_scope }}'
+          case "$release_scope" in
+            full|desktop|watch|runtime-pointer|docs|compatibility|metadata) ;;
+            *)
+              echo "不支持的 release_scope：$release_scope" >&2
+              exit 1
+              ;;
+          esac
+
+          release_date="$(date -u '+%Y.%m.%d')"
+          latest_same_day_tag="$(
+            gh release list \
+              --repo "${GITHUB_REPOSITORY}" \
+              --limit 100 \
+              --json tagName,isDraft \
+              --jq '[.[] | select(.isDraft == false and (.tagName | startswith("beta-'"${release_date}"'.")))][0].tagName // empty'
+          )"
+          sequence=1
+          if [[ -n "$latest_same_day_tag" ]]; then
+            last_sequence="${latest_same_day_tag##*.}"
+            [[ "$last_sequence" =~ ^[0-9]+$ ]] || {
+              echo "无法解析已存在的 beta 发布序号：$latest_same_day_tag" >&2
+              exit 1
+            }
+            sequence="$((last_sequence + 1))"
+          fi
+          release_tag="beta-${release_date}.${sequence}"
+
+          previous_release_tag="$(
+            gh release list \
+              --repo "${GITHUB_REPOSITORY}" \
+              --limit 100 \
+              --json tagName,isDraft \
+              --jq '[.[] | select(.isDraft == false and (.tagName | startswith("beta-")))][0].tagName // empty'
+          )"
+          previous_release_manifest_url=""
+          if [[ -n "$previous_release_tag" ]]; then
+            previous_release_manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${previous_release_tag}/release-manifest.json"
+            curl -fsSL "$previous_release_manifest_url" -o "$RUNNER_TEMP/previous-release-manifest.json"
+          elif [[ "$release_scope" != "full" ]]; then
+            echo "release_scope=${release_scope} 需要已有上一版 beta release manifest" >&2
+            exit 1
+          fi
+
+          runtime_tag="$(
+            gh release list \
+              --repo "${GITHUB_REPOSITORY}" \
+              --limit 100 \
+              --json tagName,isDraft \
+              --jq '[.[] | select(.isDraft == false and (.tagName | startswith("runtime-")))][0].tagName // empty'
+          )"
+          [[ -n "$runtime_tag" ]] || {
+            echo "找不到已发布的 Runtime Release，请先运行 publish-runtime.yml" >&2
+            exit 1
+          }
+          runtime_manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${runtime_tag}/runtime-manifest.json"
+          runtime_manifest_path="$RUNNER_TEMP/runtime-manifest.json"
+          curl -fsSL "$runtime_manifest_url" -o "$runtime_manifest_path"
+          runtime_manifest_sha256="$(shasum -a 256 "$runtime_manifest_path" | awk '{print $1}')"
+          desktop_version="$(printf '%s' '${{ inputs.desktop_version }}' | xargs)"
+          watch_version_name="$(printf '%s' '${{ inputs.watch_version_name }}' | xargs)"
+          watch_version_code="$(printf '%s' '${{ inputs.watch_version_code }}' | xargs)"
+          built_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          commit_full="$(git rev-parse HEAD)"
+          commit_short="$(git rev-parse --short HEAD)"
+
+          require_desktop=0
+          require_watch=0
+          case "$release_scope" in
+            full)
+              require_desktop=1
+              require_watch=1
+              ;;
+            desktop)
+              require_desktop=1
+              ;;
+            watch)
+              require_watch=1
+              ;;
+          esac
+          if [[ "$require_desktop" == "1" && -z "$desktop_version" ]]; then
+            echo "release_scope=$release_scope 必须提供 desktop_version" >&2
+            exit 1
+          fi
+          if [[ "$require_watch" == "1" && ( -z "$watch_version_name" || -z "$watch_version_code" ) ]]; then
+            echo "release_scope=$release_scope 必须提供 watch_version_name 和 watch_version_code" >&2
+            exit 1
+          fi
+          if [[ -n "$desktop_version" && ! "$desktop_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z][0-9A-Za-z.+-]*)?$ ]]; then
+            echo "desktop_version 不符合版本规则：$desktop_version" >&2
+            exit 1
+          fi
+          if [[ -n "$watch_version_name" && ! "$watch_version_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z][0-9A-Za-z.+-]*)?$ ]]; then
+            echo "watch_version_name 不符合版本规则：$watch_version_name" >&2
+            exit 1
+          fi
+          if [[ -n "$watch_version_code" && ! "$watch_version_code" =~ ^[1-9][0-9]*$ ]]; then
+            echo "watch_version_code 必须是正整数：$watch_version_code" >&2
+            exit 1
+          fi
+
+          {
+            echo "release_tag=$release_tag"
+            echo "release_scope=$release_scope"
+            echo "runtime_tag=$runtime_tag"
+            echo "runtime_manifest_url=$runtime_manifest_url"
+            echo "runtime_manifest_sha256=$runtime_manifest_sha256"
+            echo "desktop_version=$desktop_version"
+            echo "watch_version_name=$watch_version_name"
+            echo "watch_version_code=$watch_version_code"
+            echo "built_at=$built_at"
+            echo "commit_full=$commit_full"
+            echo "commit_short=$commit_short"
+            echo "previous_release_manifest_url=$previous_release_manifest_url"
+            echo "previous_release_tag=$previous_release_tag"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Beta 发布计划"
+            echo "- 发布标签：$release_tag"
+            echo "- 发布范围：$release_scope"
+            echo "- Runtime manifest：$runtime_manifest_url"
+            echo "- Runtime manifest SHA256：$runtime_manifest_sha256"
+            if [[ -n "$desktop_version" ]]; then
+              echo "- Desktop 版本：$desktop_version"
+            fi
+            if [[ -n "$watch_version_name" ]]; then
+              echo "- Watch 版本：$watch_version_name ($watch_version_code)"
+            fi
+            echo "- Commit：$commit_short"
+            if [[ -n "$previous_release_tag" ]]; then
+              echo "- 上一版 Beta：$previous_release_tag"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  preflight-tests:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 安装 Android SDK 组件
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/android-sdk}}"
+          mkdir -p "$sdk_root"
+
+          sdkmanager_bin="$(
+            {
+              find "$sdk_root/cmdline-tools" -type f -path '*/bin/sdkmanager' 2>/dev/null || true
+              command -v sdkmanager 2>/dev/null || true
+            } | sort | tail -1
+          )"
+
+          if [[ -z "$sdkmanager_bin" || ! -x "$sdkmanager_bin" ]]; then
+            tools_zip="$RUNNER_TEMP/commandlinetools-linux.zip"
+            tools_extract="$RUNNER_TEMP/android-cmdline-tools"
+            curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip" -o "$tools_zip"
+            rm -rf "$tools_extract" "$sdk_root/cmdline-tools/latest"
+            mkdir -p "$tools_extract" "$sdk_root/cmdline-tools"
+            unzip -q "$tools_zip" -d "$tools_extract"
+            mv "$tools_extract/cmdline-tools" "$sdk_root/cmdline-tools/latest"
+            sdkmanager_bin="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          set +o pipefail
+          yes | "$sdkmanager_bin" --sdk_root="$sdk_root" --licenses >/dev/null
+          set -o pipefail
+          "$sdkmanager_bin" --sdk_root="$sdk_root" --install "platforms;android-35" "build-tools;35.0.0"
+
+          {
+            echo "ANDROID_SDK_ROOT=$sdk_root"
+            echo "ANDROID_HOME=$sdk_root"
+          } >> "$GITHUB_ENV"
+
+      - name: 安装 ripgrep
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+
+      - name: 运行 OpenWatcher preflight
+        shell: bash
+        run: scripts/test-openwatcher-preflight.sh
+
+  backend:
+    needs:
+      - prepare
+      - preflight-tests
+    if: ${{ needs.prepare.outputs.release_scope == 'full' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - darwin-amd64
+          - darwin-arm64
+          - windows-amd64
+          - windows-arm64
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: 构建 Backend 发布产物
+        shell: bash
+        env:
+          OPENWATCHER_RELEASE_DIR: dist/release
+          OPENWATCHER_DESKTOP_VERSION: ${{ needs.prepare.outputs.desktop_version }}
+        run: |
+          set -euo pipefail
+          scripts/package-backend-release.sh "${{ matrix.platform }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: backend-${{ matrix.platform }}
+          path: dist/release/openwatcher-${{ matrix.platform }}*
+          if-no-files-found: error
+
+  watch-apk:
+    needs:
+      - prepare
+      - preflight-tests
+    if: ${{ needs.prepare.outputs.release_scope == 'full' || needs.prepare.outputs.release_scope == 'watch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: 安装 Android SDK 组件
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/android-sdk}}"
+          mkdir -p "$sdk_root"
+
+          sdkmanager_bin="$(
+            {
+              find "$sdk_root/cmdline-tools" -type f -path '*/bin/sdkmanager' 2>/dev/null || true
+              command -v sdkmanager 2>/dev/null || true
+            } | sort | tail -1
+          )"
+
+          if [[ -z "$sdkmanager_bin" || ! -x "$sdkmanager_bin" ]]; then
+            tools_zip="$RUNNER_TEMP/commandlinetools-linux.zip"
+            tools_extract="$RUNNER_TEMP/android-cmdline-tools"
+            curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip" -o "$tools_zip"
+            rm -rf "$tools_extract" "$sdk_root/cmdline-tools/latest"
+            mkdir -p "$tools_extract" "$sdk_root/cmdline-tools"
+            unzip -q "$tools_zip" -d "$tools_extract"
+            mv "$tools_extract/cmdline-tools" "$sdk_root/cmdline-tools/latest"
+            sdkmanager_bin="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          set +o pipefail
+          yes | "$sdkmanager_bin" --sdk_root="$sdk_root" --licenses >/dev/null
+          set -o pipefail
+          "$sdkmanager_bin" --sdk_root="$sdk_root" --install "platforms;android-35" "build-tools;35.0.0"
+
+          {
+            echo "ANDROID_SDK_ROOT=$sdk_root"
+            echo "ANDROID_HOME=$sdk_root"
+          } >> "$GITHUB_ENV"
+
+      - name: 还原 watch release 签名材料
+        shell: bash
+        env:
+          OPENWATCHER_WATCH_KEYSTORE_BASE64: ${{ secrets.OPENWATCHER_WATCH_KEYSTORE_BASE64 }}
+          OPENWATCHER_WATCH_STORE_PASSWORD: ${{ secrets.OPENWATCHER_WATCH_STORE_PASSWORD }}
+          OPENWATCHER_WATCH_KEY_ALIAS: ${{ secrets.OPENWATCHER_WATCH_KEY_ALIAS }}
+          OPENWATCHER_WATCH_KEY_PASSWORD: ${{ secrets.OPENWATCHER_WATCH_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p watch-app/signing
+          printf '%s' "$OPENWATCHER_WATCH_KEYSTORE_BASE64" | base64 --decode > watch-app/signing/openwatcher-release.keystore
+          cat > watch-app/signing/release.properties <<EOF
+          storeFile=signing/openwatcher-release.keystore
+          storePassword=$OPENWATCHER_WATCH_STORE_PASSWORD
+          keyAlias=$OPENWATCHER_WATCH_KEY_ALIAS
+          keyPassword=$OPENWATCHER_WATCH_KEY_PASSWORD
+          EOF
+
+      - name: 构建并校验 watch release APK
+        shell: bash
+        env:
+          RELEASE_SUMMARY: ${{ inputs.release_summary }}
+          OPENWATCHER_RELEASE_CHANNEL: beta
+          OPENWATCHER_CHANGELOG_URL: https://openwatcher.ai/changelog.json
+          OPENWATCHER_WATCH_VERSION_NAME: ${{ needs.prepare.outputs.watch_version_name }}
+          OPENWATCHER_WATCH_VERSION_CODE: ${{ needs.prepare.outputs.watch_version_code }}
+        run: |
+          set -euo pipefail
+          scripts/package-watch-release.sh "${{ needs.prepare.outputs.release_tag }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: watch-release-apk
+          path: |
+            dist/*.apk
+            dist/*.apk.json
+            dist/*.apk.sha256
+            dist/*.apk.libs.txt
+            dist/*.apk.apksigner.txt
+            dist/latest-apk.json
+            dist/latest-apk-changelog.json
+          if-no-files-found: error
+
+  desktop:
+    needs:
+      - prepare
+      - preflight-tests
+    if: ${{ needs.prepare.outputs.release_scope == 'full' || needs.prepare.outputs.release_scope == 'desktop' }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-amd64
+            runner: windows-latest
+          - platform: windows-arm64
+            runner: windows-11-arm
+          - platform: darwin-amd64
+            runner: macos-15-intel
+          - platform: darwin-arm64
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: 安装 NSIS
+        if: startsWith(matrix.platform, 'windows-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! where.exe makensis >/dev/null 2>&1; then
+            choco install nsis -y --no-progress
+          fi
+          makensis_win_path="$(where.exe makensis 2>/dev/null | head -1 | tr -d '\r' || true)"
+          makensis_unix_path=""
+          if [[ -n "$makensis_win_path" ]]; then
+            makensis_unix_path="$(cygpath -u "$makensis_win_path")"
+          else
+            makensis_unix_path="$(
+              find \
+                "/c/ProgramData/chocolatey" \
+                "/c/Program Files" \
+                "/c/Program Files (x86)" \
+                -type f -iname 'makensis.exe' 2>/dev/null \
+                | head -1
+            )"
+          fi
+          [[ -n "$makensis_unix_path" ]] || { echo "未找到 makensis 可执行文件" >&2; exit 1; }
+          makensis_unix_dir="$(dirname "$makensis_unix_path")"
+          echo "$makensis_unix_dir" >> "$GITHUB_PATH"
+
+      - name: 构建 Desktop 产物
+        shell: bash
+        env:
+          OPENWATCHER_GITHUB_REPOSITORY: ${{ github.repository }}
+          OPENWATCHER_RUNTIME_CHANNEL_MANIFEST_URL: https://openwatcher.ai/channels/beta.json
+          OPENWATCHER_DESKTOP_VERSION: ${{ needs.prepare.outputs.desktop_version }}
+        run: |
+          set -euo pipefail
+          scripts/package-desktop-release.sh --platform "${{ matrix.platform }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: dist/release/OpenWatcher-Desktop-${{ matrix.platform }}*
+          if-no-files-found: error
+
+  assemble-release:
+    needs:
+      - prepare
+      - preflight-tests
+      - backend
+      - desktop
+      - watch-apk
+    if: ${{ always() && needs.prepare.result == 'success' && needs.preflight-tests.result == 'success' && needs.backend.result != 'failure' && needs.desktop.result != 'failure' && needs.watch-apk.result != 'failure' && needs.backend.result != 'cancelled' && needs.desktop.result != 'cancelled' && needs.watch-apk.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: 安装 ripgrep
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+
+      - uses: actions/download-artifact@v8
+        if: ${{ needs.backend.result == 'success' }}
+        with:
+          path: dist/backend-artifacts
+          pattern: backend-*
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        if: ${{ needs.desktop.result == 'success' }}
+        with:
+          path: dist/desktop-artifacts
+          pattern: desktop-*
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        if: ${{ needs.watch-apk.result == 'success' }}
+        with:
+          name: watch-release-apk
+          path: dist/watch-release
+
+      - name: 汇总公开 Beta Release 资产
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/public-release
+
+          if [[ -d dist/backend-artifacts ]]; then
+            find dist/backend-artifacts -maxdepth 1 -type f -exec cp {} dist/public-release/ \;
+          fi
+
+          if [[ -d dist/desktop-artifacts ]]; then
+            find dist/desktop-artifacts -maxdepth 1 -type f -exec cp {} dist/public-release/ \;
+          fi
+
+          if [[ -d dist/watch-release ]]; then
+            watch_apk_path="$(find dist/watch-release -maxdepth 1 -type f -name '*.apk' | head -1)"
+            [[ -n "$watch_apk_path" ]] || { echo "未找到 watch APK" >&2; exit 1; }
+            cp "$watch_apk_path" dist/public-release/
+
+            for suffix in .sha256 .libs.txt .apksigner.txt .json; do
+              candidate="${watch_apk_path}${suffix}"
+              [[ -f "$candidate" ]] && cp "$candidate" dist/public-release/
+            done
+
+            [[ -f dist/watch-release/latest-apk.json ]] || { echo "缺少 latest-apk.json" >&2; exit 1; }
+            cp dist/watch-release/latest-apk.json dist/public-release/latest-apk.json
+            [[ -f dist/watch-release/latest-apk-changelog.json ]] || { echo "缺少 latest-apk-changelog.json" >&2; exit 1; }
+            cp dist/watch-release/latest-apk-changelog.json dist/public-release/latest-apk-changelog.json
+          fi
+
+      - name: 生成第三方组件说明
+        shell: bash
+        env:
+          OPENWATCHER_RELEASE_DIR: dist/public-release
+        run: |
+          set -euo pipefail
+          scripts/generate-third-party-notices.sh
+
+      - name: 下载上一版 release manifest
+        if: ${{ needs.prepare.outputs.previous_release_manifest_url != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "${{ needs.prepare.outputs.previous_release_manifest_url }}" -o dist/previous-release-manifest.json
+
+      - name: 生成 Beta manifest、changelog 与发布说明
+        shell: bash
+        env:
+          OPENWATCHER_PUBLIC_RELEASE_DIR: dist/public-release
+          OPENWATCHER_RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          OPENWATCHER_RELEASE_SCOPE: ${{ needs.prepare.outputs.release_scope }}
+          OPENWATCHER_RELEASE_SUMMARY: ${{ inputs.release_summary }}
+          OPENWATCHER_RELEASE_PUBLISHED_AT: ${{ needs.prepare.outputs.built_at }}
+          OPENWATCHER_RELEASE_COMMIT: ${{ needs.prepare.outputs.commit_full }}
+          OPENWATCHER_RUNTIME_RELEASE_TAG: ${{ needs.prepare.outputs.runtime_tag }}
+          OPENWATCHER_RUNTIME_MANIFEST_URL: ${{ needs.prepare.outputs.runtime_manifest_url }}
+          OPENWATCHER_RUNTIME_MANIFEST_SHA256: ${{ needs.prepare.outputs.runtime_manifest_sha256 }}
+          OPENWATCHER_DESKTOP_VERSION: ${{ needs.prepare.outputs.desktop_version }}
+          OPENWATCHER_GITHUB_REPOSITORY: ${{ github.repository }}
+          OPENWATCHER_PREVIOUS_RELEASE_MANIFEST_PATH: dist/previous-release-manifest.json
+        run: |
+          set -euo pipefail
+          scripts/generate-release-manifest.sh dist/public-release
+          scripts/generate-changelog-entry.sh
+          scripts/generate-release-notes.sh
+          scripts/generate-checksums.sh
+          scripts/check-release-artifacts.sh dist/public-release
+
+      - name: 校验 Beta Release 资产
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -f dist/public-release/release-manifest.json ]] || { echo "缺少 release-manifest.json" >&2; exit 1; }
+          [[ -f dist/public-release/changelog-entry.json ]] || { echo "缺少 changelog-entry.json" >&2; exit 1; }
+          [[ -f dist/public-release/release-notes.md ]] || { echo "缺少 release-notes.md" >&2; exit 1; }
+          [[ -f dist/public-release/checksums.txt ]] || { echo "缺少 checksums.txt" >&2; exit 1; }
+          if find dist/public-release -maxdepth 1 -type f | grep -Eq 'debug[^/]*\.apk$|app-debug\.apk$'; then
+            echo "发布目录混入 debug APK" >&2
+            exit 1
+          fi
+          if find dist/public-release -maxdepth 1 -type f | grep -Eq '\.keystore$|\.jks$|release\.properties$'; then
+            echo "发布目录混入签名材料" >&2
+            exit 1
+          fi
+          if rg -n 'watch-beta-stable|runtime-stable|current/' dist/public-release/release-manifest.json; then
+            echo "发现旧稳定标签或 current 指针残留" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: beta-release-bundle
+          path: dist/public-release/*
+          if-no-files-found: error
+
+  publish-release:
+    needs:
+      - prepare
+      - assemble-release
+    if: ${{ always() && needs.prepare.result == 'success' && needs.assemble-release.result == 'success' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: beta-release-bundle
+          path: dist/public-release
+
+      - name: 创建或更新 Beta GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          notes_file="dist/public-release/release-notes.md"
+          [[ -f "$notes_file" ]] || { echo "缺少 release-notes.md" >&2; exit 1; }
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "OpenWatcher Beta ${RELEASE_TAG}" --notes-file "$notes_file" --prerelease >/dev/null
+          else
+            gh release create "$RELEASE_TAG" --title "OpenWatcher Beta ${RELEASE_TAG}" --notes-file "$notes_file" --prerelease >/dev/null
+          fi
+
+          while IFS= read -r -d '' file; do
+            gh release upload "$RELEASE_TAG" "$file" --clobber >/dev/null
+          done < <(find dist/public-release -maxdepth 1 -type f -print0)

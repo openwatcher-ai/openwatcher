@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenWatcher Desktop 安装"
+  short_description: "自动下载、校验、安装并启动 OpenWatcher Desktop。"
+  default_prompt: "使用 $openwatcher-desktop-install 在这台电脑安装最新 OpenWatcher Desktop，并在安装完成后启动应用。"

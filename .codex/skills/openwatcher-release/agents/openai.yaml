@@ -1,0 +1,7 @@
+interface:
+  display_name: "OpenWatcher 发版总控"
+  short_description: "统筹 OpenWatcher beta、runtime、watch APK 与发布机制。"
+  default_prompt: "Use $openwatcher-release to analyze intent, choose the right OpenWatcher release path, and carry out or refine beta, runtime, watch APK, metadata, notes, and artifact validation workflows."
+
+policy:
+  allow_implicit_invocation: true
