@@ -24,6 +24,7 @@ beta-YYYY.MM.DD.N
 - Product Release tag 不代表统一产品语义版本。
 - 客户端更新判断不依赖 Product Release tag。
 - Desktop / Watch 组件版本必须来自发布 workflow input、打包脚本环境变量或已验证产物 metadata，不能从源码文件中的固定版本号读取。
+- 版本递增、组件复用和发布范围判断必须以最新公开 GitHub Release 的 `release-manifest.json` 以及 official 仓发布的 channel metadata 为准；仓库内 `watch-app/RELEASE_BUILDS.md` 只作为人工审计日志，不能作为正式版本事实来源。
 - 正式发布产物必须来自 GitHub Actions。
 - 未变化组件必须明确标记为 `reused` 或 `not_included`，不得重新构造下载 URL。
 

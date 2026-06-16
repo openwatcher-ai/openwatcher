@@ -24,6 +24,7 @@
 - 如果 release 构建失败后从同一 commit 重试，且 app code、资源、依赖、配置、服务端契约行为都没有变化，可以复用同一版本，但要记录为构建重试。
 - 不要通过修改 `watch-app/app/build.gradle.kts` 来升版本；release 版本必须通过 `OPENWATCHER_WATCH_VERSION_NAME` 和 `OPENWATCHER_WATCH_VERSION_CODE`，或 GitHub Actions 的 `watch_version_name` / `watch_version_code` input 传入。
 - `watch-app/app/build.gradle.kts` 只负责消费构建输入和生成本地 dev 标识，不应保存具体 release 版本号。
+- 判断“上一版 release”和递增版本时，只能读取最新公开 GitHub Release 的 `release-manifest.json`，并结合 official 仓发布的 channel metadata。`watch-app/RELEASE_BUILDS.md`、`dist/latest-apk.json` 和本地历史构建输出都不能作为正式版本事实来源。
 
 ## 必须流程
 
@@ -31,14 +32,17 @@
 
 ```bash
 git status --short
-tail -20 watch-app/RELEASE_BUILDS.md
+sed -n '1,120p' watch-app/RELEASE_BUILDS.md
+gh release list --repo openwatcher-ai/openwatcher --limit 20 || true
 cat dist/latest-apk.json 2>/dev/null || true
 cat dist/latest-apk-changelog.json 2>/dev/null || true
 ```
 
+`watch-app/RELEASE_BUILDS.md` 和 `dist/latest-apk*.json` 在这里仅用于发现本地残留或审计输出，不参与版本号选择。
+
 如果只是本地模拟器试装 release APK，且主工作区存在无关未提交改动，不要为了通过打包脚本而暂存、stash 或回退用户改动。可以从目标提交创建干净临时 worktree，在该 worktree 中复制本机忽略的 `watch-app/local.properties` 和签名文件后运行打包脚本；最终 artifact、metadata 和构建记录再同步回主工作区。最终答复必须说明这是本地验证构建，不是公开发布。
 
-2. 如果代码、资源、依赖、配置或服务端契约行为自上一版 release 后有变化，在任何 release build 命令前确定新的 `versionName` 和 `versionCode`，并准备通过构建输入传入。
+2. 如果代码、资源、依赖、配置或服务端契约行为自上一版公开 release metadata 后有变化，在任何 release build 命令前确定新的 `versionName` 和 `versionCode`，并准备通过构建输入传入。
 
 3. 运行目标范围测试，至少：
 
@@ -80,6 +84,8 @@ APK_SIGNER="$(
 `dist/latest-apk.json` 中的 `artifact`、changelog metadata、`.sha256` 文件、ABI 列表和验签 APK 文件名必须都指向 `dist/` 下同一个最终文件。任何一项失败，都不能告诉用户 release APK 已准备好。
 
 8. 在 `watch-app/RELEASE_BUILDS.md` 记录 release。
+
+此记录只是人工审计日志。CI 生成的 `latest-apk-changelog.json` 默认只包含本次构建说明，不从仓库内历史构建表聚合旧版本说明；正式跨版本 changelog 由 Product Release 的 `changelog-entry.json` 和 official channel changelog 承担。
 
 必须包含：
 

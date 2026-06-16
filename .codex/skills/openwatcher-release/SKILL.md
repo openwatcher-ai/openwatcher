@@ -57,6 +57,7 @@ description: Use whenever Codex needs to diagnose, implement, plan, execute, or 
 - 触发 `publish-runtime.yml` 时，必须提供 `desktop_min_version`、`watch_version_name` 和 `watch_version_code`，同时显式提供 platform-tools 与 cloudflared 版本或 URL。
 - 组件级发布时，未变化组件必须明确标记为 `reused` 或 `not_included`，不能制造新的 APK、桌面包或 changelog 事实。
 - Watch APK 必须按 `references/watch-apk-release-gate.md` 验证最终 artifact，不能把 debug APK、Gradle 输出目录或聊天传输文件当作公开产物。
+- `watch-app/RELEASE_BUILDS.md` 只作为人工审计日志，不能作为版本递增、发版范围或组件复用的依据；这些判断必须来自最新公开 GitHub Release 的 `release-manifest.json` 和 official 仓发布的 channel metadata。
 - 除非用户明确要求，不要引入新的发布基础设施、别名层或复杂镜像编排。
 - 每次使用结束前，必须做一次轻量复盘，并把高复用经验沉淀回 Skill、reference、文档或检查脚本。
 
@@ -143,7 +144,7 @@ ai-task show
 sed -n '1,260p' .github/workflows/publish-beta.yml
 sed -n '1,260p' .github/workflows/publish-runtime.yml
 sed -n '1,220p' desktop-app/README.md
-sed -n '1,220p' watch-app/RELEASE_BUILDS.md
+sed -n '1,120p' watch-app/RELEASE_BUILDS.md  # 仅作审计日志，不作为版本依据
 ```
 
 3. 判断这次是：

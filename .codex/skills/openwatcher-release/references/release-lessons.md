@@ -67,3 +67,7 @@
 - Desktop 前端 fallback/mock 数据也会进入公开仓残留扫描和打包产物；示例 Codex 路径不要写 `/Users/example/...`，应使用 `~/.codex`、`CODEX_HOME` 这类不会被当作本机路径的占位值。
 - Desktop 有用户可见更新时必须在 workflow input 或 `OPENWATCHER_DESKTOP_VERSION` 中传入新的 Desktop 版本，否则 official channel 即使换了安装包，Desktop 更新检查也会因为版本号相同而提示“已是最新版本”。
 - 如果上一版 beta 已发布某个 Watch `versionName` / `versionCode`，后续目标 commit 又包含 Watch 代码、资源、依赖、配置或服务端契约行为变化，发布前必须通过 workflow input 或 `OPENWATCHER_WATCH_VERSION_NAME` / `OPENWATCHER_WATCH_VERSION_CODE` 传入递增后的 Watch 版本，不能复用上一版 APK 版本重打 release。
+
+### 2026-06-16
+
+- 重建公开仓后，仓库内 `watch-app/RELEASE_BUILDS.md` 可能仍带有旧私有构建记录；首版和后续发版都不能参考这类仓库内构建表决定版本号、组件复用或 changelog 历史。正式事实源必须是最新公开 GitHub Release 的 `release-manifest.json` 和 official 仓发布的 channel metadata。

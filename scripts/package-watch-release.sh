@@ -43,6 +43,18 @@ generate_latest_changelog_json() {
   )
 }
 
+write_history_markdown() {
+  local output_path="$1"
+  local row="$2"
+  cat > "$output_path" <<EOF
+# 手表 APK 构建记录
+
+| 构建时间 UTC | versionName | versionCode | Git commit | 构建分支 | APK 文件 | SHA256 | 说明类型 | 变更摘要 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+$row
+EOF
+}
+
 if [[ -n "$(git -C "$ROOT_DIR" status --short -- ':!dist')" ]]; then
   echo "release APK 必须基于已提交的工作区构建；请先提交代码改动，再重新运行。" >&2
   git -C "$ROOT_DIR" status --short -- ':!dist' >&2
@@ -130,9 +142,13 @@ JSON
 cp "$FINAL_APK.json" "$DIST_DIR/latest-apk.json"
 
 RELATIVE_APK="${FINAL_APK#$ROOT_DIR/}"
-printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
-  "$BUILT_AT" "$VERSION_NAME" "$VERSION_CODE" "$COMMIT" "$BRANCH" "$RELATIVE_APK" "$SHA256" "user" "$SUMMARY" >> "$HISTORY_FILE"
-generate_latest_changelog_json "$HISTORY_FILE" "$DIST_DIR/latest-apk-changelog.json"
+CURRENT_HISTORY_ROW="$(printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s |' \
+  "$BUILT_AT" "$VERSION_NAME" "$VERSION_CODE" "$COMMIT" "$BRANCH" "$RELATIVE_APK" "$SHA256" "user" "$SUMMARY")"
+printf '%s\n' "$CURRENT_HISTORY_ROW" >> "$HISTORY_FILE"
+CURRENT_HISTORY_FILE="$(mktemp "${TMPDIR:-/tmp}/openwatcher-current-watch-release.XXXXXX.md")"
+trap 'rm -f "$CURRENT_HISTORY_FILE"' EXIT
+write_history_markdown "$CURRENT_HISTORY_FILE" "$CURRENT_HISTORY_ROW"
+generate_latest_changelog_json "$CURRENT_HISTORY_FILE" "$DIST_DIR/latest-apk-changelog.json"
 
 cat <<SUMMARY
 Release APK summary
