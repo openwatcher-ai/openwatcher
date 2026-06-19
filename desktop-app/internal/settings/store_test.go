@@ -62,6 +62,12 @@ func TestLoadDesktopSettingsDefaultsWhenMissing(t *testing.T) {
 	if !got.AutoStartBackend {
 		t.Fatalf("LoadDesktopSettings default autoStartBackend = false, want true")
 	}
+	if got.DeveloperEnvironment.Enabled {
+		t.Fatalf("LoadDesktopSettings default developer enabled = true, want false")
+	}
+	if got.DeveloperEnvironment.BaseURL != "http://10.0.2.2:18787" {
+		t.Fatalf("LoadDesktopSettings default developer base url = %q", got.DeveloperEnvironment.BaseURL)
+	}
 }
 
 func TestSaveDesktopSettingsPersistsValue(t *testing.T) {
@@ -69,7 +75,18 @@ func TestSaveDesktopSettingsPersistsValue(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	t.Setenv("HOME", configHome)
 
-	if err := SaveDesktopSettings(DesktopSettings{AutoStartBackend: false}); err != nil {
+	if err := SaveDesktopSettings(DesktopSettings{
+		AutoStartBackend: false,
+		DeveloperEnvironment: DeveloperEnvironmentSettings{
+			Enabled:              true,
+			Mode:                 "workspace",
+			RepoPath:             "/tmp/openwatcher",
+			BaseURL:              "http://10.0.2.2:18787",
+			DeviceName:           "dev-watch",
+			HostAlias:            "10.0.2.2",
+			ManagedTunnelEnabled: true,
+		},
+	}); err != nil {
 		t.Fatalf("SaveDesktopSettings err = %v", err)
 	}
 
@@ -79,6 +96,12 @@ func TestSaveDesktopSettingsPersistsValue(t *testing.T) {
 	}
 	if got.AutoStartBackend {
 		t.Fatalf("LoadDesktopSettings autoStartBackend = true, want false")
+	}
+	if !got.DeveloperEnvironment.Enabled {
+		t.Fatalf("LoadDesktopSettings developer enabled = false, want true")
+	}
+	if !got.DeveloperEnvironment.ManagedTunnelEnabled {
+		t.Fatalf("LoadDesktopSettings developer managed tunnel = false, want true")
 	}
 
 	path, err := desktopSettingsPath()
@@ -95,5 +118,8 @@ func TestSaveDesktopSettingsPersistsValue(t *testing.T) {
 	}
 	if decoded.AutoStartBackend {
 		t.Fatalf("saved autoStartBackend = true, want false")
+	}
+	if decoded.DeveloperEnvironment.DeviceName != "dev-watch" {
+		t.Fatalf("saved developer device name = %q, want dev-watch", decoded.DeveloperEnvironment.DeviceName)
 	}
 }

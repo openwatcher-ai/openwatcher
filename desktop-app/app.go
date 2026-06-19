@@ -76,7 +76,8 @@ type DiagnosticsPayload struct {
 }
 
 type DesktopSettingsState struct {
-	AutoStartBackend bool `json:"autoStartBackend"`
+	AutoStartBackend     bool                                  `json:"autoStartBackend"`
+	DeveloperEnvironment settings.DeveloperEnvironmentSettings `json:"developerEnvironment"`
 }
 
 func NewApp() *App {
@@ -110,6 +111,9 @@ func (a *App) startup(ctx context.Context) {
 	desktopSettings, _ := settings.LoadDesktopSettings()
 	if desktopSettings.AutoStartBackend {
 		_ = a.backendManager.StartBackend(a.processContext(), a.backendStartConfig())
+	}
+	if desktopSettings.DeveloperEnvironment.Enabled {
+		_ = a.ensureDeveloperEnvironmentFromSettings(desktopSettings.DeveloperEnvironment)
 	}
 	if a.runtimeManager != nil {
 		go func() {
@@ -246,7 +250,8 @@ func (a *App) CopyDiagnostics() string {
 func (a *App) GetDesktopSettings() DesktopSettingsState {
 	loaded, _ := settings.LoadDesktopSettings()
 	return DesktopSettingsState{
-		AutoStartBackend: loaded.AutoStartBackend,
+		AutoStartBackend:     loaded.AutoStartBackend,
+		DeveloperEnvironment: loaded.DeveloperEnvironment,
 	}
 }
 
@@ -260,7 +265,8 @@ func (a *App) SetAutoStartBackend(enabled bool) (DesktopSettingsState, error) {
 		return DesktopSettingsState{}, err
 	}
 	return DesktopSettingsState{
-		AutoStartBackend: loaded.AutoStartBackend,
+		AutoStartBackend:     loaded.AutoStartBackend,
+		DeveloperEnvironment: loaded.DeveloperEnvironment,
 	}, nil
 }
 

@@ -172,7 +172,18 @@ const mockDeveloperSnapshot = {
 }
 
 const fallbackHandlers = {
-  GetDesktopSettings: async () => ({ autoStartBackend: true }),
+  GetDesktopSettings: async () => ({
+    autoStartBackend: true,
+    developerEnvironment: {
+      enabled: false,
+      mode: "workspace",
+      repoPath: "",
+      baseUrl: "http://10.0.2.2:18787",
+      deviceName: "watch",
+      hostAlias: "10.0.2.2",
+      managedTunnelEnabled: false
+    }
+  }),
   GetSnapshot: async () => structuredClone(mockSnapshot),
   GetBackendLogs: async () => [
     { at: "10:24:40", message: "[backend] Health check OK" },

@@ -7,12 +7,30 @@ import (
 )
 
 type DesktopSettings struct {
-	AutoStartBackend bool `json:"autoStartBackend"`
+	AutoStartBackend     bool                         `json:"autoStartBackend"`
+	DeveloperEnvironment DeveloperEnvironmentSettings `json:"developerEnvironment"`
+}
+
+type DeveloperEnvironmentSettings struct {
+	Enabled              bool   `json:"enabled"`
+	Mode                 string `json:"mode,omitempty"`
+	RepoPath             string `json:"repoPath,omitempty"`
+	BaseURL              string `json:"baseUrl,omitempty"`
+	DeviceName           string `json:"deviceName,omitempty"`
+	HostAlias            string `json:"hostAlias,omitempty"`
+	ManagedTunnelEnabled bool   `json:"managedTunnelEnabled,omitempty"`
 }
 
 func DefaultDesktopSettings() DesktopSettings {
 	return DesktopSettings{
 		AutoStartBackend: true,
+		DeveloperEnvironment: DeveloperEnvironmentSettings{
+			Enabled:    false,
+			Mode:       "workspace",
+			BaseURL:    "http://10.0.2.2:18787",
+			DeviceName: "watch",
+			HostAlias:  "10.0.2.2",
+		},
 	}
 }
 
@@ -44,14 +62,29 @@ func SaveDesktopSettings(value DesktopSettings) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	payload, err := json.MarshalIndent(DesktopSettings{
-		AutoStartBackend: value.AutoStartBackend,
-	}, "", "  ")
+	payload, err := json.MarshalIndent(normalizeDesktopSettings(value), "", "  ")
 	if err != nil {
 		return err
 	}
 	payload = append(payload, '\n')
 	return writeFileAtomically(path, payload, 0o600)
+}
+
+func normalizeDesktopSettings(value DesktopSettings) DesktopSettings {
+	defaults := DefaultDesktopSettings()
+	if value.DeveloperEnvironment.Mode == "" {
+		value.DeveloperEnvironment.Mode = defaults.DeveloperEnvironment.Mode
+	}
+	if value.DeveloperEnvironment.BaseURL == "" {
+		value.DeveloperEnvironment.BaseURL = defaults.DeveloperEnvironment.BaseURL
+	}
+	if value.DeveloperEnvironment.DeviceName == "" {
+		value.DeveloperEnvironment.DeviceName = defaults.DeveloperEnvironment.DeviceName
+	}
+	if value.DeveloperEnvironment.HostAlias == "" {
+		value.DeveloperEnvironment.HostAlias = defaults.DeveloperEnvironment.HostAlias
+	}
+	return value
 }
 
 func desktopSettingsPath() (string, error) {

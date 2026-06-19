@@ -21,15 +21,17 @@ func main() {
 	}
 
 	err := wails.Run(&options.App{
-		Title:            "OpenWatcher",
-		Width:            1320,
-		Height:           860,
-		MinWidth:         1120,
-		MinHeight:        760,
-		BackgroundColour: &options.RGBA{R: 10, G: 17, B: 26, A: 1},
+		Title:             "OpenWatcher",
+		Width:             1320,
+		Height:            860,
+		MinWidth:          1120,
+		MinHeight:         760,
+		HideWindowOnClose: true,
+		BackgroundColour:  &options.RGBA{R: 10, G: 17, B: 26, A: 1},
 		AssetServer: &assetserver.Options{
 			Assets: frontendAssets,
 		},
+		Menu: app.applicationMenu(),
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
 		},

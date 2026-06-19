@@ -40,6 +40,7 @@ export function createAppStore() {
   const state = reactive(createInitialState())
   let copyFeedbackTimer = null
   let desktopUpdateProgressOff = null
+  let desktopStateChangedOff = null
 
   const live = computed(() => deriveLiveState(state.snapshot))
   const topbarItems = computed(() => topbarStatusItems(live.value))
@@ -180,15 +181,15 @@ export function createAppStore() {
       }
     ]
 
-    if (targets.developer) {
+    if (developerStatusVisible()) {
       items.push({
         id: "developer",
         icon: "Wand2",
         label: "开发环境",
-        ok: Boolean(targets.developer?.ok)
+        ok: Boolean(targets.developer?.ok ?? developerIsHealthy())
       })
     }
-    if (developerTunnelIsManaged()) {
+    if (developerTunnelStatusVisible()) {
       items.push({
         id: "developerTunnel",
         icon: "Cloud",
@@ -472,6 +473,25 @@ export function createAppStore() {
 
   function developerIsHealthy() {
     return Boolean(developerStatus()?.lastHealth?.ok)
+  }
+
+  function developerStatusVisible() {
+    const status = developerStatus()
+    return Boolean(
+      state.developerAction.busy ||
+      state.developerForm.enabled ||
+      status?.running ||
+      ["healthy", "recovering", "error"].includes(status?.state)
+    )
+  }
+
+  function developerTunnelStatusVisible() {
+    const tunnel = developerTunnelStatus()
+    return developerStatusVisible() && Boolean(
+      state.developerForm.managedTunnelEnabled ||
+      tunnel?.running ||
+      tunnel?.configured
+    )
   }
 
   function developerStateTone() {
@@ -1257,12 +1277,53 @@ export function createAppStore() {
     return nextEnabled
   }
 
+  function applyDeveloperDesktopSettings(desktopSettings) {
+    const developer = desktopSettings?.developerEnvironment
+    if (!developer) {
+      return
+    }
+    const next = {
+      enabled: Boolean(developer.enabled),
+      managedTunnelEnabled: Boolean(developer.managedTunnelEnabled)
+    }
+    if (developer.mode) {
+      next.mode = String(developer.mode).trim()
+    }
+    if (developer.repoPath) {
+      next.repoPath = String(developer.repoPath).trim()
+    }
+    if (developer.hostAlias) {
+      next.hostAlias = String(developer.hostAlias).trim()
+    }
+    const baseURL = String(developer.baseUrl || developer.baseURL || "").trim()
+    if (baseURL) {
+      next.devBaseUrl = trimTrailingSlash(baseURL)
+    }
+    if (developer.deviceName) {
+      next.deviceName = String(developer.deviceName).trim()
+    }
+    state.developerForm = {
+      ...state.developerForm,
+      ...next
+    }
+    state.developerForm.accessMode = developerAccessModeFromBaseUrl(state.developerForm.devBaseUrl)
+  }
+
   async function loadDesktopSettings() {
     try {
       return await invoke("GetDesktopSettings")
     } catch {
       return {
-        autoStartBackend: state.settingsPreferences.autoStartBackend
+        autoStartBackend: state.settingsPreferences.autoStartBackend,
+        developerEnvironment: {
+          enabled: Boolean(state.developerForm.enabled),
+          mode: state.developerForm.mode,
+          repoPath: state.developerForm.repoPath,
+          baseUrl: state.developerForm.devBaseUrl,
+          deviceName: state.developerForm.deviceName,
+          hostAlias: state.developerForm.hostAlias,
+          managedTunnelEnabled: Boolean(state.developerForm.managedTunnelEnabled)
+        }
       }
     }
   }
@@ -1605,16 +1666,18 @@ export function createAppStore() {
     const developerTunnelHealthy = developerTunnelIsManaged()
       ? Boolean(developerTunnel?.running || developerTunnel?.lastHealth?.ok)
       : null
+    const includeDeveloper = developerStatusVisible()
+    const includeDeveloperTunnel = developerTunnelStatusVisible()
     return {
       codex: { ok: Boolean(currentLive.codexHealthy), detail: currentLive.codexStatusNote || "Codex 未就绪", source: "Codex" },
       backend: { ok: Boolean(currentLive.backendHealthy), detail: currentLive.backendStatusNote || "本机服务未就绪", source: "本机服务" },
       resources: { ok: installerHealthy, detail: installerHealthy ? "运行时依赖齐全" : "存在缺失的运行时依赖", source: "安装资源" },
-      developer: developerHealthy == null ? null : {
+      developer: !includeDeveloper || developerHealthy == null ? null : {
         ok: developerHealthy,
         detail: currentDeveloperStatus?.message || "开发环境未就绪",
         source: "开发环境"
       },
-      developerTunnel: developerTunnelHealthy == null ? null : {
+      developerTunnel: !includeDeveloperTunnel || developerTunnelHealthy == null ? null : {
         ok: developerTunnelHealthy,
         detail: developerTunnel?.message || "开发隧道未就绪",
         source: "开发隧道"
@@ -1856,6 +1919,18 @@ export function createAppStore() {
       return
     }
     desktopUpdateProgressOff = onRuntimeEvent("desktop-update-progress", handleDesktopUpdateProgress)
+  }
+
+  function ensureDesktopStateChangedListener() {
+    if (desktopStateChangedOff) {
+      return
+    }
+    desktopStateChangedOff = onRuntimeEvent("desktop-state-changed", async () => {
+      const desktopSettings = await loadDesktopSettings()
+      applyDesktopSettings(desktopSettings)
+      applyDeveloperDesktopSettings(desktopSettings)
+      await refreshState()
+    })
   }
 
   async function installDesktopUpdateAction() {
@@ -2692,9 +2767,11 @@ export function createAppStore() {
 
   async function bootstrap() {
     ensureDesktopUpdateProgressListener()
+    ensureDesktopStateChangedListener()
     state.theme = loadThemeState()
     state.settingsPreferences = loadSettingsPreferencesState()
-    applyDesktopSettings(await loadDesktopSettings())
+    const desktopSettings = await loadDesktopSettings()
+    applyDesktopSettings(desktopSettings)
     const requestedPage = new URLSearchParams(window.location.search).get("page") || window.location.hash.replace(/^#/, "")
     if (navItems.some((item) => item.id === requestedPage)) {
       state.currentPage = requestedPage
@@ -2707,6 +2784,7 @@ export function createAppStore() {
         deviceName: savedDeveloperForm.deviceName || state.developerForm.deviceName
       }
     }
+    applyDeveloperDesktopSettings(desktopSettings)
     const savedInstallNetwork = loadInstallNetworkState()
     if (savedInstallNetwork) {
       if (savedInstallNetwork.networkMode) {

@@ -198,8 +198,11 @@ func (a *App) ListDeveloperRepositories() []devenv.Repository {
 }
 
 func (a *App) GetDeveloperEnvironmentSnapshot(request DeveloperEnvironmentRequest) DeveloperEnvironmentSnapshot {
+	if a.devEnvManager == nil {
+		return a.developerEnvironmentSnapshot(devenv.Status{})
+	}
 	cfg := developerConfigFromRequest(request)
-	cfg.ManagedTunnel = a.devTunnelManager.Status().Configured && request.ManagedTunnelEnabled
+	cfg.ManagedTunnel = a.devTunnelManager != nil && a.devTunnelManager.Status().Configured && request.ManagedTunnelEnabled
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 	status := a.devEnvManager.Observe(ctx, cfg)
@@ -207,25 +210,38 @@ func (a *App) GetDeveloperEnvironmentSnapshot(request DeveloperEnvironmentReques
 }
 
 func (a *App) EnsureDeveloperEnvironment(request DeveloperEnvironmentRequest) DeveloperEnvironmentSnapshot {
+	if a.devEnvManager == nil {
+		return a.developerEnvironmentSnapshot(devenv.Status{})
+	}
 	cfg := developerConfigFromRequest(request)
-	cfg.ManagedTunnel = a.devTunnelManager.Status().Configured && request.ManagedTunnelEnabled
+	cfg.ManagedTunnel = a.devTunnelManager != nil && a.devTunnelManager.Status().Configured && request.ManagedTunnelEnabled
 	status := a.devEnvManager.Ensure(a.processContext(), cfg)
 	if cfg.Enabled && cfg.ManagedTunnel && strings.EqualFold(cfg.Mode, string(devenv.ModeWorkspace)) {
 		originURL := rootconfig.DefaultPublicBaseURL(devSidecarLoopbackListen(cfg.BaseURL))
 		_ = a.devTunnelManager.Start(a.processContext(), originURL)
-	} else {
+	} else if a.devTunnelManager != nil {
 		_ = a.devTunnelManager.Stop(context.Background())
 	}
+	_ = a.persistDeveloperEnvironmentPreference(request, cfg.Enabled)
 	return a.developerEnvironmentSnapshot(status)
 }
 
 func (a *App) StopDeveloperEnvironment() DeveloperEnvironmentSnapshot {
-	_ = a.devEnvManager.Stop(context.Background())
+	if a.devEnvManager != nil {
+		_ = a.devEnvManager.Stop(context.Background())
+	}
 	if a.devBackendManager != nil {
 		_ = a.devBackendManager.StopBackend(context.Background())
 	}
-	_ = a.devTunnelManager.Stop(context.Background())
-	return a.developerEnvironmentSnapshot(a.devEnvManager.Status())
+	if a.devTunnelManager != nil {
+		_ = a.devTunnelManager.Stop(context.Background())
+	}
+	status := devenv.Status{}
+	if a.devEnvManager != nil {
+		status = a.devEnvManager.Status()
+	}
+	_ = a.persistDeveloperEnvironmentPreference(developerRequestFromStatus(status, false), false)
+	return a.developerEnvironmentSnapshot(status)
 }
 
 func (a *App) RedeemDeveloperTunnelCode(code string) (DeveloperEnvironmentSnapshot, error) {
@@ -298,11 +314,19 @@ func (a *App) SubmitRemoteWatchBootstrap(request RemoteWatchBootstrapRequest) (R
 }
 
 func (a *App) developerEnvironmentSnapshot(status devenv.Status) DeveloperEnvironmentSnapshot {
+	tunnelStatus := tunnel.Status{}
+	if a.devTunnelManager != nil {
+		tunnelStatus = a.devTunnelManager.Status()
+	}
+	var logs []devenv.LogLine
+	if a.devEnvManager != nil {
+		logs = a.devEnvManager.GetLogs(120)
+	}
 	return DeveloperEnvironmentSnapshot{
 		Repositories: a.ListDeveloperRepositories(),
 		Status:       status,
-		Tunnel:       a.devTunnelManager.Status(),
-		Logs:         a.devEnvManager.GetLogs(120),
+		Tunnel:       tunnelStatus,
+		Logs:         logs,
 	}
 }
 
@@ -932,6 +956,55 @@ func developerRequestFromStatus(status devenv.Status, enabled bool) DeveloperEnv
 	}
 }
 
+func developerRequestFromSettings(value settings.DeveloperEnvironmentSettings, enabled bool) DeveloperEnvironmentRequest {
+	return DeveloperEnvironmentRequest{
+		Enabled:              enabled,
+		Mode:                 firstNonBlank(value.Mode, string(devenv.ModeWorkspace)),
+		RepoPath:             firstNonBlank(value.RepoPath, currentRepoRoot()),
+		BaseURL:              firstNonBlank(value.BaseURL, defaultDeveloperBaseURL()),
+		DeviceName:           firstNonBlank(value.DeviceName, "watch"),
+		ManagedTunnelEnabled: value.ManagedTunnelEnabled,
+		HostAlias:            firstNonBlank(value.HostAlias, "10.0.2.2"),
+	}
+}
+
+func developerSettingsFromRequest(request DeveloperEnvironmentRequest, enabled bool) settings.DeveloperEnvironmentSettings {
+	cfg := developerConfigFromRequest(request)
+	return settings.DeveloperEnvironmentSettings{
+		Enabled:              enabled,
+		Mode:                 firstNonBlank(cfg.Mode, string(devenv.ModeWorkspace)),
+		RepoPath:             firstNonBlank(cfg.RepoPath, currentRepoRoot()),
+		BaseURL:              firstNonBlank(cfg.BaseURL, defaultDeveloperBaseURL()),
+		DeviceName:           firstNonBlank(cfg.DeviceName, "watch"),
+		HostAlias:            firstNonBlank(cfg.HostAlias, "10.0.2.2"),
+		ManagedTunnelEnabled: cfg.ManagedTunnel,
+	}
+}
+
+func (a *App) persistDeveloperEnvironmentPreference(request DeveloperEnvironmentRequest, enabled bool) error {
+	loaded, err := settings.LoadDesktopSettings()
+	if err != nil {
+		loaded = settings.DefaultDesktopSettings()
+	}
+	loaded.DeveloperEnvironment = developerSettingsFromRequest(request, enabled)
+	return settings.SaveDesktopSettings(loaded)
+}
+
+func (a *App) ensureDeveloperEnvironmentFromSettings(value settings.DeveloperEnvironmentSettings) error {
+	if a.devEnvManager == nil {
+		return nil
+	}
+	request := developerRequestFromSettings(value, true)
+	cfg := developerConfigFromRequest(request)
+	cfg.ManagedTunnel = a.devTunnelManager != nil && a.devTunnelManager.Status().Configured && request.ManagedTunnelEnabled
+	_ = a.devEnvManager.Ensure(a.processContext(), cfg)
+	if cfg.ManagedTunnel && strings.EqualFold(cfg.Mode, string(devenv.ModeWorkspace)) {
+		originURL := rootconfig.DefaultPublicBaseURL(devSidecarLoopbackListen(cfg.BaseURL))
+		_ = a.devTunnelManager.Start(a.processContext(), originURL)
+	}
+	return nil
+}
+
 func ensureManagedAPKDistDir(cfg *rootconfig.Config) {
 	distDir := filepath.Clean(filepath.Join(settings.AppRoot(), "..", "dist"))
 	if strings.TrimSpace(cfg.ApkDistDir) == "" ||
@@ -1070,8 +1143,12 @@ func developerConfigFromRequest(request DeveloperEnvironmentRequest) devenv.Conf
 	}
 }
 
+func defaultDeveloperBaseURL() string {
+	return "http://" + net.JoinHostPort("10.0.2.2", defaultDevSidecarPort)
+}
+
 func defaultDevSidecarLoopbackListen() string {
-	return devSidecarLoopbackListen("http://10.0.2.2:" + defaultDevSidecarPort)
+	return devSidecarLoopbackListen(defaultDeveloperBaseURL())
 }
 
 func devSidecarLoopbackListen(baseURL string) string {
