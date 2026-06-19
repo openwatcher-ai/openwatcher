@@ -81,21 +81,26 @@ static NSMenuItem *OpenWatcherActionItem(NSString *title, SEL action) {
 }
 
 static NSString *OpenWatcherStatusIconBase64(void) {
-    return @"iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAADkklEQVR4nOyXW4hVVRzGf6czWnkKu2tWkihZ"
-           @"YYVlJN2lspKwGhC6EORzEr1FT93opfBlpJ6qgXzqYkTZFCZEF4PULmSaEOGEGdaI1Fyb05zzxYLvwGK1z977zBD"
-           @"Nw/lgs/da///s75v//l/W6ZHEbMIJ/7eAFF1BRegKKkJPh/6LgQ3A5UAd+BJ4Gzhu+5nAetvPAA4C7wA/lGYIZV"
-           @"/iWiDpXbXHZkm9kg5KOippIrHvkLSkDFcZMSslNXLEtHBYUp+kXyT9mWEPe2uL+CoFjfEU4BhwYsmA7wN2A73A"
-           @"6Rn2o8BK3zNRlNRbMsS86jy5H/g4sV0GXARcC1wAPA6M2la3yGdyGQtCmOKmyFb1fWPi03DO1Gy/RNKQpHFJI5J"
-           @"GJc2fTg7dkRD1R7abE9+7Ir9A+pukDySdavtzFhJsdUkPtOPN+2SLk/U2358EpoD5QMV724HrgCPABPAXsBx4C6"
-           @"gB34aPAVSBJnBWO9K8PjQMDPrb/+1eE/JnroWcBnwHHDbZF8DdwMsW0QAWAs8DX/udTd+PT0fQp8CHwBDwM/Aoc"
-           @"DXwB3AucDLwicW08BWwEXgROMnRmgTW+o7/oW/ashYk9WpJl0p6P8mnQ5KWJQneE61DIr/p3Nkk6YikQfeonTNp"
-           @"jIHoo4xquzLyCb1sn7t0NdpfKOlhSfslfS/pgKSfJN2ex1k0yx4Ebk32wnokWod8WhE9t7AEeMSfreL0eCPKp0"
-           @"wUNcYXkvV9wF7gTuAW7zWdxDVXX8BVQJ+fp5zgoSCeBRblEeZF6GLgnGi9A9gJrAOWWlDV+3X7hEhcAbwURSv4"
-           @"vOauX3H1XugK/hfyInR9sn7dx4rW8WIZ8IqjNeUrjI3HXJnjjl4/sBU43/alHisdR2hOsm56dq22qHneH3DU9ro"
-           @"t7DJ5iMJn7ks32Iajvqsta07G9yaV9V5k25xRefd6fi2XtEHSusj/CUkDkrZL2pPMxNJlPyeDNCbZmmF/yKV/d"
-           @"uS3yoP1mKRf3Ysq0+1DW0w05is0t6clrZe0wlM9xTZJa9yrnsqw983kgFbzjDrPlRTONvuBzz1sBz0+bsx7SYRh"
-           @"59dIO4eiPjQG3AP86AE76WRe5ORe4Ea5u4SYRkZT7VhQwCGXdr+jNM8RC0fR2zzRrwE25bxjwH+zp4is6JOlCE"
-           @"1ujc/aIXoHfAZqYa7FrfLzkM9Kv5cl6FTQf45Z98u1K6gIXUFF+CcAAP//+wLLKID1wCEAAAAASUVORK5CYII=";
+    return @"iVBORw0KGgoAAAANSUhEUgAAACwAAAAsCAYAAAAehFoBAAAEpklEQVR4nOyYS2xVVRSGv7agaAsCVfEVNCKm"
+           @"DUGwAfEBIr5RSXwRQxwZjNHEBxPjyIExDnSkA2OciBFiYkw0RiViImpERTRReUlBpCiFFmux2AelXH6zk/8mO8"
+           @"fTe3fLrUron+z0nLPXvvs/a6/1r3U6RhInEqr/awJDxSjhkcYo4ZHGSUe4CrgYaPB1KTQCs4Ga49ox6PAwxt2S"
+           @"Nuqf+ErSXZFduF4laY+kQ5IGJB2VtEHSw8PZe6gLGiRtyyGaxRZJyyRtl/SbpA5J/Tl2uyRdOVKEFyQQzWK5Sbd"
+           @"J6ilhd3OlCZ8/DLJFPChph6Q/HRJ56PPpleVSldhLfApcl/N8G/CeE24pMC3HpgtY4etJTtCHovkj/rseuKESSX"
+           @"fZIF65I8d28SC2eyXNiexmSmp1Ah52uATv31KJkFiZQ2BxND9BUl103+gjjhFI/SKpKbILL9Brsod8/XolCH+T2"
+           @"fz7TGzfK6kqs2a6pAO277VK7JPULGluZLdGUrdHn9WlJJ+UwnFJ5n6t/17k2PwVmJwpCDuBucBPQL9HiNWxwGqg"
+           @"yXYbXLyqnQcTypFJIdwC/A60A/uAPcAFwCvAKcA1wBxgKjAxqnjB7iZgs8kORONF248LaeRRAP4qR2ZMAuEPgB"
+           @"nAYaDXHl1lb10KnAWcYy+/482LaAWW+eWm29MFzy21KhyN1uyqBOFPgIP2cIs3D/LVEx13H/C+r7NotYy95L6j"
+           @"y6HQ73DrM+HA5fNyZFJ0uNoe7rZWnpeZ/xG4EeiIntU7NOJnIVye9bF/AbwA1ALHHFrB01cDbSXZJFa601ytstg"
+           @"vaXxOVeyyrl6YmRtnSQxN0iZJmyVtdU/xWAqX1PbyecdgjOCp64G6zPMznO1jHNcxQqI9Y48OOBkLDru3U4ikh"
+           @"MS5Vocspvn4ngTeBTZFc4scEusyZN9yshYctzVe97hD7Q+gsxSZFA8/mvPsVpO91puHE7jCc4HoZx41EdnV9mx"
+           @"VtHeQvCecwD+7yS+JFMKLMvehKHxtSZrvZiYc76smXcz4Gr/M2cBr1txjHoH0D3ZGt70+0S9UEimydlXmfp03C"
+           @"RI1zzF8pjP+Q7/gFtuG7uwpa/cE39eZ7AqvCxXzdF83uTM8LsJ5a4KXXrZHgxSdGh3/ty7LoQjcB3wHTIlGkLq"
+           @"nrcOzoxOa5ApaEilJ1+yKVsQBbxww3v1wNmz63D9vt+emukiEI1/peVyEJkd9RCgyy0uyGWZ7+UA0XytpZ45Nw"
+           @"V8R1ZKmSJonaWy0bqGkdn8jBj3eLem5SrSXM3PIhHZxSWQzSVLnIM37ApOOW9DL3bwXUfx0mlGOT+onUjj229w"
+           @"AFRx/ndbQte7MQsxudQJlsd4yF9bOAu7MsVkD3F6OSCrhEIcbXcWOOOnaHKOB9Mf+O9Hka1N+NINQOPaXM0otz"
+           @"R0uFu1uUnqst7V+mVlOzINOrrJ9bQbzU8gOhXDADmCh++Nqy1ide+FG63WDy2soFm8m/OZur/kylcRQ/7cWvjw"
+           @"eAe5xXLdYP+sdn/WuWiHW73fD9AawN/qNIGkfAUtcfJqHQiA1hv83OOn+3fqvY5TwSGOU8EjjhCP8dwAAAP//"
+           @"sJCfzgU3vqgAAAAASUVORK5CYII=";
 }
 
 static NSImage *OpenWatcherStatusTemplateImage(void) {
@@ -105,7 +110,7 @@ static NSImage *OpenWatcherStatusTemplateImage(void) {
         embeddedImage = [[[NSImage alloc] initWithData:data] autorelease];
     }
     if (embeddedImage != nil) {
-        embeddedImage.size = NSMakeSize(18.0, 18.0);
+        embeddedImage.size = NSMakeSize(22.0, 22.0);
         embeddedImage.template = YES;
         return embeddedImage;
     }
@@ -114,7 +119,7 @@ static NSImage *OpenWatcherStatusTemplateImage(void) {
         image = [NSImage imageNamed:@"iconfile.icns"];
     }
     if (image != nil) {
-        image.size = NSMakeSize(18.0, 18.0);
+        image.size = NSMakeSize(22.0, 22.0);
         image.template = YES;
     }
     return image;
