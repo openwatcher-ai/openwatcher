@@ -346,6 +346,10 @@ func (m *Manager) Status() Status {
 		status.Message = m.label + "正在运行。"
 		status.StartedAt = m.startedAt.Format(time.RFC3339)
 	}
+	if status.Configured && m.lastHealth != nil && !m.lastHealth.OK {
+		status.State = "error"
+		status.Message = firstNonBlank(m.lastHealth.Message, m.label+"公网健康检查失败。")
+	}
 	if strings.TrimSpace(m.lastError) != "" {
 		status.Message = m.lastError
 		if status.Configured {

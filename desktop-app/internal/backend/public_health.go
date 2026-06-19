@@ -51,12 +51,13 @@ func ProbePublicHealth(ctx context.Context, baseURL string, targetLabel string) 
 		Codex  CodexInfo   `json:"codex"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
+		rawBody := strings.TrimSpace(string(body))
 		return HealthStatus{
 			OK:       false,
 			HTTPCode: resp.StatusCode,
 			Endpoint: endpoint,
-			Message:  "/healthz 返回无法解析",
-			RawBody:  strings.TrimSpace(string(body)),
+			Message:  publicHealthParseFailureMessage(label, resp.StatusCode, rawBody),
+			RawBody:  rawBody,
 		}, err
 	}
 
@@ -70,4 +71,15 @@ func ProbePublicHealth(ctx context.Context, baseURL string, targetLabel string) 
 		Codex:    payload.Codex,
 		RawBody:  strings.TrimSpace(string(body)),
 	}, nil
+}
+
+func publicHealthParseFailureMessage(label string, statusCode int, rawBody string) string {
+	normalizedBody := strings.ToLower(strings.TrimSpace(rawBody))
+	if strings.Contains(normalizedBody, "error code: 1033") {
+		return fmt.Sprintf("%s /healthz 返回 Cloudflare 1033：隧道没有可用的公网连接。", strings.TrimSpace(label))
+	}
+	if statusCode >= 500 && strings.Contains(normalizedBody, "cloudflare") {
+		return fmt.Sprintf("%s /healthz 返回 Cloudflare 错误：HTTP %d。", strings.TrimSpace(label), statusCode)
+	}
+	return "/healthz 返回无法解析"
 }

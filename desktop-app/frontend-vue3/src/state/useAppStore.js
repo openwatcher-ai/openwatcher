@@ -194,7 +194,7 @@ export function createAppStore() {
         id: "developerTunnel",
         icon: "Cloud",
         label: "开发隧道",
-        ok: Boolean(targets.developerTunnel?.ok ?? developerTunnelStatus()?.running)
+        ok: Boolean(targets.developerTunnel?.ok ?? developerTunnelIsHealthy())
       })
     }
     if (targets.publicEntry) {
@@ -416,8 +416,14 @@ export function createAppStore() {
     if (!developerTunnelIsManaged()) {
       return "已关闭"
     }
-    if (tunnel?.running) {
+    if (tunnel?.lastHealth && !tunnel.lastHealth.ok) {
+      return "公网异常"
+    }
+    if (tunnel?.running && tunnel?.lastHealth?.ok) {
       return "运行中"
+    }
+    if (tunnel?.running) {
+      return "检测中"
     }
     if (tunnel?.configured) {
       return "待启动"
@@ -473,6 +479,11 @@ export function createAppStore() {
 
   function developerIsHealthy() {
     return Boolean(developerStatus()?.lastHealth?.ok)
+  }
+
+  function developerTunnelIsHealthy() {
+    const tunnel = developerTunnelStatus()
+    return Boolean(developerTunnelIsManaged() && tunnel?.running && tunnel?.lastHealth?.ok)
   }
 
   function developerStatusVisible() {
@@ -1664,7 +1675,7 @@ export function createAppStore() {
       ? Boolean(currentDeveloperStatus.running && currentDeveloperStatus.lastHealth?.ok)
       : null
     const developerTunnelHealthy = developerTunnelIsManaged()
-      ? Boolean(developerTunnel?.running || developerTunnel?.lastHealth?.ok)
+      ? Boolean(developerTunnel?.running && developerTunnel?.lastHealth?.ok)
       : null
     const includeDeveloper = developerStatusVisible()
     const includeDeveloperTunnel = developerTunnelStatusVisible()
@@ -2931,6 +2942,7 @@ export function createAppStore() {
       developerStatusPhase,
       developerIsRunning,
       developerIsHealthy,
+      developerTunnelIsHealthy,
       developerStateTone,
       developerStateLabel,
       developerStartedDurationLabel,

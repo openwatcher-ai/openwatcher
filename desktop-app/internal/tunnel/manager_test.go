@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"openwatcher/desktop-app/internal/logging"
 )
@@ -148,5 +149,50 @@ func TestStartMissingBindingRecordsLabelledLog(t *testing.T) {
 	}
 	if !strings.Contains(logs[0].Message, "启动开发环境托管隧道失败") {
 		t.Fatalf("start failure log = %q", logs[0].Message)
+	}
+}
+
+func TestStatusRunningTunnelWithFailedHealthIsError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sleep command is not portable on Windows")
+	}
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Skipf("start sleep: %v", err)
+	}
+	defer func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}()
+
+	store := NewNamedStore(t.TempDir(), "managed-dev-tunnel-test")
+	if err := store.SaveBinding(Binding{
+		PublicBaseURL: "https://ow-dev.example.com",
+		TunnelID:      "cf_tunnel_demo",
+	}, RedeemResponse{TunnelToken: "secret-token"}); err != nil {
+		t.Fatalf("SaveBinding err = %v", err)
+	}
+	manager := &Manager{
+		locator:   NewBinaryLocator(t.TempDir()),
+		store:     store,
+		redactor:  logging.NewRedactor(),
+		label:     "开发环境托管隧道",
+		cmd:       cmd,
+		startedAt: time.Now(),
+		lastHealth: &HealthCheck{
+			OK:      false,
+			Message: "开发环境托管隧道公网地址 /healthz 返回 Cloudflare 1033：隧道没有可用的公网连接。",
+		},
+	}
+
+	status := manager.Status()
+	if status.State != "error" {
+		t.Fatalf("status state = %q, want error", status.State)
+	}
+	if !status.Running {
+		t.Fatalf("status should still report process running")
+	}
+	if !strings.Contains(status.Message, "Cloudflare 1033") {
+		t.Fatalf("status message = %q", status.Message)
 	}
 }

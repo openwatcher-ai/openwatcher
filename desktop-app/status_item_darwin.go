@@ -37,7 +37,8 @@ func (a *App) refreshStatusItem() {
 	}
 	developerTunnelRunning := false
 	if a.devTunnelManager != nil {
-		developerTunnelRunning = a.devTunnelManager.Status().Running
+		status := a.devTunnelManager.Status()
+		developerTunnelRunning = status.Running && status.LastHealth != nil && status.LastHealth.OK
 	}
 	C.OpenWatcherRefreshStatusItem(cBool(serviceRunning), cBool(developerRunning), cBool(developerTunnelRunning))
 }
