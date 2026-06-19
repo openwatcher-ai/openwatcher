@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -206,6 +207,7 @@ func (a *App) GetDeveloperEnvironmentSnapshot(request DeveloperEnvironmentReques
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 	status := a.devEnvManager.Observe(ctx, cfg)
+	a.observeDeveloperTunnelHealth(cfg)
 	return a.developerEnvironmentSnapshot(status)
 }
 
@@ -219,6 +221,9 @@ func (a *App) EnsureDeveloperEnvironment(request DeveloperEnvironmentRequest) De
 	if cfg.Enabled && cfg.ManagedTunnel && strings.EqualFold(cfg.Mode, string(devenv.ModeWorkspace)) {
 		originURL := rootconfig.DefaultPublicBaseURL(devSidecarLoopbackListen(cfg.BaseURL))
 		_ = a.devTunnelManager.Start(a.processContext(), originURL)
+		healthCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, _ = a.devTunnelManager.PublicHealth(healthCtx)
+		cancel()
 	} else if a.devTunnelManager != nil {
 		_ = a.devTunnelManager.Stop(context.Background())
 	}
@@ -318,16 +323,47 @@ func (a *App) developerEnvironmentSnapshot(status devenv.Status) DeveloperEnviro
 	if a.devTunnelManager != nil {
 		tunnelStatus = a.devTunnelManager.Status()
 	}
-	var logs []devenv.LogLine
-	if a.devEnvManager != nil {
-		logs = a.devEnvManager.GetLogs(120)
-	}
 	return DeveloperEnvironmentSnapshot{
 		Repositories: a.ListDeveloperRepositories(),
 		Status:       status,
 		Tunnel:       tunnelStatus,
-		Logs:         logs,
+		Logs:         a.combinedDeveloperLogs(120),
 	}
+}
+
+func (a *App) observeDeveloperTunnelHealth(cfg devenv.Config) {
+	if a.devTunnelManager == nil || !cfg.ManagedTunnel {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	_, _ = a.devTunnelManager.PublicHealth(ctx)
+}
+
+func (a *App) combinedDeveloperLogs(limit int) []devenv.LogLine {
+	var logs []devenv.LogLine
+	if a.devEnvManager != nil {
+		logs = append(logs, a.devEnvManager.GetLogs(limit)...)
+	}
+	if a.devTunnelManager != nil {
+		for _, line := range a.devTunnelManager.GetLogs(limit) {
+			message := strings.TrimSpace(line.Message)
+			if message == "" {
+				continue
+			}
+			logs = append(logs, devenv.LogLine{
+				At:      line.At,
+				Message: message,
+			})
+		}
+	}
+	sort.SliceStable(logs, func(i, j int) bool {
+		return logs[i].At < logs[j].At
+	})
+	if limit > 0 && len(logs) > limit {
+		return append([]devenv.LogLine(nil), logs[len(logs)-limit:]...)
+	}
+	return logs
 }
 
 func (a *App) EnsureRuntimeDependencies() Snapshot {

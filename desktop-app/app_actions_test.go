@@ -251,6 +251,24 @@ sleep 30
 	}
 }
 
+func TestCombinedDeveloperLogsIncludesDeveloperTunnelHealth(t *testing.T) {
+	app := &App{
+		devTunnelManager: tunnel.NewNamedManager(t.TempDir(), nil, logging.NewRedactor(), "managed-dev-tunnel-test", "开发环境托管隧道"),
+	}
+	app.devTunnelManager.RecordHealth(backend.HealthStatus{
+		OK:      false,
+		Message: "无法连接开发隧道 /healthz",
+	})
+
+	logs := app.combinedDeveloperLogs(10)
+	if len(logs) != 1 {
+		t.Fatalf("combined developer logs len = %d, want 1", len(logs))
+	}
+	if !strings.Contains(logs[0].Message, "开发环境托管隧道健康检查失败") {
+		t.Fatalf("combined developer log = %q", logs[0].Message)
+	}
+}
+
 func TestSetPairingConfig(t *testing.T) {
 	cfg := rootconfig.Config{}
 	now := time.Date(2026, 6, 9, 0, 0, 0, 0, time.UTC)

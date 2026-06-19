@@ -404,6 +404,9 @@ func (a *App) ClearDeveloperEnvironmentLogs() DeveloperEnvironmentSnapshot {
 	if a.devEnvManager != nil {
 		a.devEnvManager.ClearLogs()
 	}
+	if a.devTunnelManager != nil {
+		a.devTunnelManager.ClearLogs()
+	}
 	return a.developerEnvironmentSnapshot(a.devEnvManager.Status())
 }
 

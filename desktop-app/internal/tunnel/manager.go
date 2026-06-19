@@ -223,6 +223,27 @@ func (m *Manager) RecordHealth(status backend.HealthStatus) {
 		Endpoint:  status.Endpoint,
 		CheckedAt: time.Now().Format(time.RFC3339),
 	}
+	if status.OK {
+		m.appendLocked(m.label + "健康检查通过：" + firstNonBlank(status.Message, "OK"))
+		return
+	}
+	m.appendLocked(m.label + "健康检查失败：" + firstNonBlank(status.Message, "未知错误"))
+}
+
+func (m *Manager) GetLogs(limit int) []LogLine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if limit <= 0 || len(m.logs) <= limit {
+		return append([]LogLine(nil), m.logs...)
+	}
+	return append([]LogLine(nil), m.logs[len(m.logs)-limit:]...)
+}
+
+func (m *Manager) ClearLogs() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.logs = nil
+	m.lastHealth = nil
 }
 
 func (m *Manager) PublicHealth(ctx context.Context) (backend.HealthStatus, error) {
@@ -425,6 +446,16 @@ func trimRepoPath(path string) string {
 		}
 	}
 	return path
+}
+
+func firstNonBlank(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func cloudflaredRunArgs(store *Store, binding Binding, token string, originURL string) ([]string, error) {
