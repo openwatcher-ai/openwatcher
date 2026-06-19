@@ -80,26 +80,44 @@ static NSMenuItem *OpenWatcherActionItem(NSString *title, SEL action) {
     return item;
 }
 
-static void OpenWatcherConfigureStatusButton(void) {
-    NSStatusBarButton *button = openwatcherStatusItem.button;
-    if (button == nil) {
-        return;
+static NSImage *OpenWatcherStatusTemplateImage(void) {
+    if (@available(macOS 11.0, *)) {
+        NSImage *image = [NSImage imageWithSystemSymbolName:@"eye" accessibilityDescription:@"OpenWatcher"];
+        if (image != nil) {
+            image.template = YES;
+            image.size = NSMakeSize(18.0, 18.0);
+            return image;
+        }
     }
-    openwatcherStatusItem.length = 116.0;
-    button.toolTip = @"OpenWatcher";
     NSImage *image = [NSImage imageNamed:@"iconfile"];
     if (image == nil) {
         image = [NSImage imageNamed:@"iconfile.icns"];
     }
     if (image != nil) {
         image.size = NSMakeSize(18.0, 18.0);
-        image.template = NO;
-        button.image = image;
-        button.imagePosition = NSImageLeft;
-        button.title = @" OpenWatcher";
+        image.template = YES;
+    }
+    return image;
+}
+
+static void OpenWatcherConfigureStatusButton(void) {
+    NSStatusBarButton *button = openwatcherStatusItem.button;
+    if (button == nil) {
         return;
     }
-    button.title = @"OpenWatcher";
+    openwatcherStatusItem.length = NSSquareStatusItemLength;
+    button.toolTip = @"OpenWatcher";
+    [button setAccessibilityLabel:@"OpenWatcher"];
+    button.title = @"";
+    button.image = nil;
+    NSImage *image = OpenWatcherStatusTemplateImage();
+    if (image != nil) {
+        button.image = image;
+        button.imagePosition = NSImageOnly;
+        return;
+    }
+    openwatcherStatusItem.length = NSVariableStatusItemLength;
+    button.title = @"OW";
 }
 
 static void OpenWatcherInstallStatusItemOnMain(void) {
