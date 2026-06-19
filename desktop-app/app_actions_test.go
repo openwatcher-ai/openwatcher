@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"openwatcher/desktop-app/internal/backend"
+	"openwatcher/desktop-app/internal/devenv"
 	"openwatcher/desktop-app/internal/logging"
 	"openwatcher/desktop-app/internal/settings"
 	"openwatcher/desktop-app/internal/tunnel"
@@ -266,6 +267,70 @@ func TestCombinedDeveloperLogsIncludesDeveloperTunnelHealth(t *testing.T) {
 	}
 	if !strings.Contains(logs[0].Message, "开发环境托管隧道健康检查失败") {
 		t.Fatalf("combined developer log = %q", logs[0].Message)
+	}
+}
+
+func TestShouldEnsureDeveloperTunnelRequiresHealthyEnabledWorkspace(t *testing.T) {
+	cfg := devenv.Config{
+		Enabled:       true,
+		Mode:          string(devenv.ModeWorkspace),
+		ManagedTunnel: true,
+	}
+	if !shouldEnsureDeveloperTunnel(devenv.Status{Running: true}, cfg) {
+		t.Fatalf("running developer environment should recover developer tunnel")
+	}
+	if !shouldEnsureDeveloperTunnel(devenv.Status{LastHealth: &devenv.Health{OK: true}}, cfg) {
+		t.Fatalf("healthy developer environment should recover developer tunnel")
+	}
+	if shouldEnsureDeveloperTunnel(devenv.Status{Running: true}, devenv.Config{
+		Enabled:       false,
+		Mode:          string(devenv.ModeWorkspace),
+		ManagedTunnel: true,
+	}) {
+		t.Fatalf("disabled developer environment must not recover developer tunnel")
+	}
+	if shouldEnsureDeveloperTunnel(devenv.Status{Running: true}, devenv.Config{
+		Enabled:       true,
+		Mode:          string(devenv.ModeExternal),
+		ManagedTunnel: true,
+	}) {
+		t.Fatalf("external mode must not recover managed developer tunnel")
+	}
+	if shouldEnsureDeveloperTunnel(devenv.Status{Running: true}, devenv.Config{
+		Enabled:       true,
+		Mode:          string(devenv.ModeWorkspace),
+		ManagedTunnel: false,
+	}) {
+		t.Fatalf("disabled tunnel flag must not recover developer tunnel")
+	}
+}
+
+func TestDeveloperSnapshotRequestUsesSavedEnabledTunnelPreference(t *testing.T) {
+	request := developerSnapshotRequestWithSavedPreferences(DeveloperEnvironmentRequest{}, settings.DeveloperEnvironmentSettings{
+		Enabled:              true,
+		Mode:                 "workspace",
+		RepoPath:             "/tmp/openwatcher",
+		BaseURL:              "http://10.0.2.2:18787",
+		DeviceName:           "watch",
+		HostAlias:            "10.0.2.2",
+		ManagedTunnelEnabled: true,
+	})
+	if !request.Enabled {
+		t.Fatalf("expected saved developer enabled flag to be used")
+	}
+	if !request.ManagedTunnelEnabled {
+		t.Fatalf("expected saved developer tunnel flag to be used")
+	}
+	if request.BaseURL != "http://10.0.2.2:18787" || request.RepoPath != "/tmp/openwatcher" {
+		t.Fatalf("saved developer request not merged: %#v", request)
+	}
+
+	request = developerSnapshotRequestWithSavedPreferences(DeveloperEnvironmentRequest{}, settings.DeveloperEnvironmentSettings{
+		Enabled:              false,
+		ManagedTunnelEnabled: true,
+	})
+	if request.Enabled || request.ManagedTunnelEnabled {
+		t.Fatalf("disabled saved developer settings must not enable snapshot request: %#v", request)
 	}
 }
 

@@ -1,9 +1,11 @@
 package tunnel
 
 import (
+	"context"
 	"os/exec"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"openwatcher/desktop-app/internal/logging"
@@ -92,5 +94,59 @@ func TestStopLockedClearsRunningMetadata(t *testing.T) {
 	}
 	if manager.runningTunnelID != "" || manager.runningOriginURL != "" {
 		t.Fatalf("running metadata was not cleared: %q %q", manager.runningTunnelID, manager.runningOriginURL)
+	}
+}
+
+func TestPublicHealthNotRunningUsesManagerLabel(t *testing.T) {
+	manager := &Manager{
+		store:    NewNamedStore(t.TempDir(), "managed-dev-tunnel-test"),
+		redactor: logging.NewRedactor(),
+		label:    "开发环境托管隧道",
+	}
+	if err := manager.store.SaveBinding(Binding{
+		PublicBaseURL: "https://ow-dev.example.com",
+		TunnelID:      "cf_tunnel_demo",
+	}, RedeemResponse{TunnelToken: "secret-token"}); err != nil {
+		t.Fatalf("SaveBinding err = %v", err)
+	}
+
+	status, err := manager.PublicHealth(context.Background())
+	if err != nil {
+		t.Fatalf("PublicHealth err = %v", err)
+	}
+	if status.OK {
+		t.Fatalf("expected not-running health to fail")
+	}
+	if !strings.Contains(status.Message, "开发环境托管隧道进程尚未启动") {
+		t.Fatalf("health message = %q", status.Message)
+	}
+	if strings.Contains(status.Message, "后端服务") {
+		t.Fatalf("health message should not mention backend service: %q", status.Message)
+	}
+	logs := manager.GetLogs(10)
+	if len(logs) == 0 {
+		t.Fatalf("expected health log to be recorded")
+	}
+	last := logs[len(logs)-1].Message
+	if !strings.Contains(last, "开发环境托管隧道健康检查失败") || strings.Contains(last, "后端服务") {
+		t.Fatalf("health log = %q", last)
+	}
+}
+
+func TestStartMissingBindingRecordsLabelledLog(t *testing.T) {
+	manager := &Manager{
+		store:    NewNamedStore(t.TempDir(), "managed-dev-tunnel-test"),
+		redactor: logging.NewRedactor(),
+		label:    "开发环境托管隧道",
+	}
+	if err := manager.Start(context.Background(), "http://127.0.0.1:18787"); err == nil {
+		t.Fatalf("expected missing binding error")
+	}
+	logs := manager.GetLogs(10)
+	if len(logs) != 1 {
+		t.Fatalf("logs len = %d, want 1", len(logs))
+	}
+	if !strings.Contains(logs[0].Message, "启动开发环境托管隧道失败") {
+		t.Fatalf("start failure log = %q", logs[0].Message)
 	}
 }

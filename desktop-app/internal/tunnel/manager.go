@@ -112,30 +112,45 @@ func (m *Manager) Redeem(ctx context.Context, code string, desktopVersion string
 }
 
 func (m *Manager) Start(ctx context.Context, originURL string) error {
+	runtimeEnsureWarning := ""
 	if m.runtime != nil {
 		if err := m.runtime.EnsureTunnel(ctx); err != nil {
-			m.mu.Lock()
-			m.lastError = err.Error()
-			m.mu.Unlock()
-			return err
+			if resolved, resolveErr := m.locator.Resolve(); resolveErr == nil {
+				runtimeEnsureWarning = "运行时资源检查失败，继续使用已存在的" + m.label + "组件：" + err.Error()
+				m.mu.Lock()
+				m.resolved = resolved
+				m.mu.Unlock()
+			} else {
+				m.mu.Lock()
+				m.lastError = err.Error()
+				m.appendLocked("启动" + m.label + "失败：" + m.lastError)
+				m.mu.Unlock()
+				return err
+			}
 		}
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if runtimeEnsureWarning != "" {
+		m.appendLocked(runtimeEnsureWarning)
+	}
 
 	binding, token, err := m.store.LoadBinding()
 	if err != nil {
 		if errors.Is(err, ErrBindingNotFound) {
 			m.lastError = "请先输入配置码并完成兑换，再启动" + m.label + "。"
+			m.appendLocked("启动" + m.label + "失败：" + m.lastError)
 			return err
 		}
 		m.lastError = "读取托管隧道配置失败。"
+		m.appendLocked("启动" + m.label + "失败：" + m.lastError)
 		return err
 	}
 	originURL = strings.TrimRight(strings.TrimSpace(originURL), "/")
 	if originURL == "" {
 		m.lastError = "缺少" + m.label + "本地转发地址。"
+		m.appendLocked("启动" + m.label + "失败：" + m.lastError)
 		return fmt.Errorf("managed tunnel origin url is empty")
 	}
 	if m.cmd != nil && m.cmd.Process != nil {
@@ -147,6 +162,7 @@ func (m *Manager) Start(ctx context.Context, originURL string) error {
 	if err := m.store.WriteRunnerConfig(binding, originURL); err != nil {
 		if _, statErr := os.Stat(m.store.CredentialsPath()); statErr == nil {
 			m.lastError = "写入" + m.label + "运行时配置失败。"
+			m.appendLocked("启动" + m.label + "失败：" + m.lastError)
 			return err
 		}
 	}
@@ -154,15 +170,16 @@ func (m *Manager) Start(ctx context.Context, originURL string) error {
 	resolved, err := m.locator.Resolve()
 	if err != nil {
 		m.lastError = m.locator.FriendlyError()
-		m.appendLocked("tunnel runner missing: " + m.lastError)
+		m.appendLocked("启动" + m.label + "失败：" + m.lastError)
 		return err
 	}
 
 	m.sharedNotice = otherCloudflaredNotice()
-	m.appendLocked("managed tunnel start requested")
+	m.appendLocked(m.label + "启动请求。")
 	args, err := cloudflaredRunArgs(m.store, binding, token, originURL)
 	if err != nil {
 		m.lastError = "缺少可用的托管隧道凭据。"
+		m.appendLocked("启动" + m.label + "失败：" + m.lastError)
 		return err
 	}
 	cmd := exec.CommandContext(ctx, resolved.Path, args...)
@@ -170,15 +187,18 @@ func (m *Manager) Start(ctx context.Context, originURL string) error {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		m.lastError = "读取 cloudflared stdout 失败。"
+		m.appendLocked("启动" + m.label + "失败：" + m.lastError)
 		return err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		m.lastError = "读取 cloudflared stderr 失败。"
+		m.appendLocked("启动" + m.label + "失败：" + m.lastError)
 		return err
 	}
 	if err := cmd.Start(); err != nil {
 		m.lastError = "启动" + m.label + "失败。"
+		m.appendLocked(m.lastError)
 		return err
 	}
 
@@ -189,7 +209,7 @@ func (m *Manager) Start(ctx context.Context, originURL string) error {
 	m.runningOriginURL = originURL
 	m.lastError = ""
 	m.tokenExpired = false
-	m.appendLocked("managed tunnel process started")
+	m.appendLocked(m.label + "进程已启动。")
 	go m.captureStream(stdout)
 	go m.captureStream(stderr)
 	go m.waitForExit(cmd)
@@ -265,7 +285,7 @@ func (m *Manager) PublicHealth(ctx context.Context) (backend.HealthStatus, error
 		status := backend.HealthStatus{
 			OK:       false,
 			Endpoint: strings.TrimRight(binding.PublicBaseURL, "/") + "/healthz",
-			Message:  "托管隧道尚未启动，请先启动后端服务。",
+			Message:  m.notRunningMessage(),
 		}
 		if expired {
 			status.Message = TokenExpiredUserMessage
@@ -274,7 +294,7 @@ func (m *Manager) PublicHealth(ctx context.Context) (backend.HealthStatus, error
 		return status, nil
 	}
 
-	status, err := backend.ProbePublicHealth(ctx, binding.PublicBaseURL, "托管隧道公网地址")
+	status, err := backend.ProbePublicHealth(ctx, binding.PublicBaseURL, m.label+"公网地址")
 	if expired && !status.OK {
 		status.Message = TokenExpiredUserMessage
 	}
@@ -319,11 +339,11 @@ func (m *Manager) Status() Status {
 		status.TokenFingerprint = fingerprintToken(token)
 		status.HealthProbePath = strings.TrimRight(binding.PublicBaseURL, "/") + "/healthz"
 		status.State = "ready"
-		status.Message = "已保存托管隧道配置，等待启动。"
+		status.Message = "已保存" + m.label + "配置，等待启动。"
 	}
 	if status.Running {
 		status.State = "running"
-		status.Message = "托管隧道正在运行。"
+		status.Message = m.label + "正在运行。"
 		status.StartedAt = m.startedAt.Format(time.RFC3339)
 	}
 	if strings.TrimSpace(m.lastError) != "" {
@@ -366,6 +386,13 @@ func (m *Manager) appendLocked(message string) {
 	if len(m.logs) > 300 {
 		m.logs = append([]LogLine(nil), m.logs[len(m.logs)-300:]...)
 	}
+}
+
+func (m *Manager) notRunningMessage() string {
+	if strings.Contains(m.label, "开发") {
+		return m.label + "进程尚未启动，请先启动开发环境，或重新打开开发隧道开关。"
+	}
+	return m.label + "进程尚未启动，请先启动本机服务。"
 }
 
 func (m *Manager) waitForExit(cmd *exec.Cmd) {

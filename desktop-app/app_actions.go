@@ -202,12 +202,15 @@ func (a *App) GetDeveloperEnvironmentSnapshot(request DeveloperEnvironmentReques
 	if a.devEnvManager == nil {
 		return a.developerEnvironmentSnapshot(devenv.Status{})
 	}
+	if loaded, err := settings.LoadDesktopSettings(); err == nil {
+		request = developerSnapshotRequestWithSavedPreferences(request, loaded.DeveloperEnvironment)
+	}
 	cfg := developerConfigFromRequest(request)
 	cfg.ManagedTunnel = a.devTunnelManager != nil && a.devTunnelManager.Status().Configured && request.ManagedTunnelEnabled
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 	status := a.devEnvManager.Observe(ctx, cfg)
-	a.observeDeveloperTunnelHealth(cfg)
+	a.reconcileDeveloperTunnel(status, cfg, false)
 	return a.developerEnvironmentSnapshot(status)
 }
 
@@ -218,15 +221,7 @@ func (a *App) EnsureDeveloperEnvironment(request DeveloperEnvironmentRequest) De
 	cfg := developerConfigFromRequest(request)
 	cfg.ManagedTunnel = a.devTunnelManager != nil && a.devTunnelManager.Status().Configured && request.ManagedTunnelEnabled
 	status := a.devEnvManager.Ensure(a.processContext(), cfg)
-	if cfg.Enabled && cfg.ManagedTunnel && strings.EqualFold(cfg.Mode, string(devenv.ModeWorkspace)) {
-		originURL := rootconfig.DefaultPublicBaseURL(devSidecarLoopbackListen(cfg.BaseURL))
-		_ = a.devTunnelManager.Start(a.processContext(), originURL)
-		healthCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_, _ = a.devTunnelManager.PublicHealth(healthCtx)
-		cancel()
-	} else if a.devTunnelManager != nil {
-		_ = a.devTunnelManager.Stop(context.Background())
-	}
+	a.reconcileDeveloperTunnel(status, cfg, true)
 	_ = a.persistDeveloperEnvironmentPreference(request, cfg.Enabled)
 	return a.developerEnvironmentSnapshot(status)
 }
@@ -331,8 +326,38 @@ func (a *App) developerEnvironmentSnapshot(status devenv.Status) DeveloperEnviro
 	}
 }
 
-func (a *App) observeDeveloperTunnelHealth(cfg devenv.Config) {
-	if a.devTunnelManager == nil || !cfg.ManagedTunnel {
+func (a *App) reconcileDeveloperTunnel(status devenv.Status, cfg devenv.Config, stopWhenDisabled bool) {
+	if a.devTunnelManager == nil {
+		return
+	}
+	if !cfg.ManagedTunnel || !strings.EqualFold(cfg.Mode, string(devenv.ModeWorkspace)) {
+		if stopWhenDisabled {
+			_ = a.devTunnelManager.Stop(context.Background())
+		}
+		return
+	}
+	if !shouldEnsureDeveloperTunnel(status, cfg) {
+		return
+	}
+	originURL := rootconfig.DefaultPublicBaseURL(devSidecarLoopbackListen(cfg.BaseURL))
+	if err := a.devTunnelManager.Start(a.processContext(), originURL); err != nil {
+		return
+	}
+	a.observeDeveloperTunnelHealth()
+}
+
+func shouldEnsureDeveloperTunnel(status devenv.Status, cfg devenv.Config) bool {
+	if !cfg.Enabled || !cfg.ManagedTunnel || !strings.EqualFold(cfg.Mode, string(devenv.ModeWorkspace)) {
+		return false
+	}
+	if status.Running {
+		return true
+	}
+	return status.LastHealth != nil && status.LastHealth.OK
+}
+
+func (a *App) observeDeveloperTunnelHealth() {
+	if a.devTunnelManager == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
@@ -1004,6 +1029,34 @@ func developerRequestFromSettings(value settings.DeveloperEnvironmentSettings, e
 	}
 }
 
+func developerSnapshotRequestWithSavedPreferences(request DeveloperEnvironmentRequest, saved settings.DeveloperEnvironmentSettings) DeveloperEnvironmentRequest {
+	if !saved.Enabled {
+		return request
+	}
+	if !request.Enabled {
+		request.Enabled = true
+	}
+	if strings.TrimSpace(request.Mode) == "" {
+		request.Mode = saved.Mode
+	}
+	if strings.TrimSpace(request.RepoPath) == "" {
+		request.RepoPath = saved.RepoPath
+	}
+	if strings.TrimSpace(request.BaseURL) == "" {
+		request.BaseURL = saved.BaseURL
+	}
+	if strings.TrimSpace(request.DeviceName) == "" {
+		request.DeviceName = saved.DeviceName
+	}
+	if strings.TrimSpace(request.HostAlias) == "" {
+		request.HostAlias = saved.HostAlias
+	}
+	if !request.ManagedTunnelEnabled && saved.ManagedTunnelEnabled {
+		request.ManagedTunnelEnabled = true
+	}
+	return request
+}
+
 func developerSettingsFromRequest(request DeveloperEnvironmentRequest, enabled bool) settings.DeveloperEnvironmentSettings {
 	cfg := developerConfigFromRequest(request)
 	return settings.DeveloperEnvironmentSettings{
@@ -1033,11 +1086,8 @@ func (a *App) ensureDeveloperEnvironmentFromSettings(value settings.DeveloperEnv
 	request := developerRequestFromSettings(value, true)
 	cfg := developerConfigFromRequest(request)
 	cfg.ManagedTunnel = a.devTunnelManager != nil && a.devTunnelManager.Status().Configured && request.ManagedTunnelEnabled
-	_ = a.devEnvManager.Ensure(a.processContext(), cfg)
-	if cfg.ManagedTunnel && strings.EqualFold(cfg.Mode, string(devenv.ModeWorkspace)) {
-		originURL := rootconfig.DefaultPublicBaseURL(devSidecarLoopbackListen(cfg.BaseURL))
-		_ = a.devTunnelManager.Start(a.processContext(), originURL)
-	}
+	status := a.devEnvManager.Ensure(a.processContext(), cfg)
+	a.reconcileDeveloperTunnel(status, cfg, true)
 	return nil
 }
 
