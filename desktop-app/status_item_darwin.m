@@ -80,14 +80,34 @@ static NSMenuItem *OpenWatcherActionItem(NSString *title, SEL action) {
     return item;
 }
 
+static NSString *OpenWatcherStatusIconBase64(void) {
+    return @"iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAADkklEQVR4nOyXW4hVVRzGf6czWnkKu2tWkihZ"
+           @"YYVlJN2lspKwGhC6EORzEr1FT93opfBlpJ6qgXzqYkTZFCZEF4PULmSaEOGEGdaI1Fyb05zzxYLvwGK1z977zBD"
+           @"Nw/lgs/da///s75v//l/W6ZHEbMIJ/7eAFF1BRegKKkJPh/6LgQ3A5UAd+BJ4Gzhu+5nAetvPAA4C7wA/lGYIZV"
+           @"/iWiDpXbXHZkm9kg5KOippIrHvkLSkDFcZMSslNXLEtHBYUp+kXyT9mWEPe2uL+CoFjfEU4BhwYsmA7wN2A73A"
+           @"6Rn2o8BK3zNRlNRbMsS86jy5H/g4sV0GXARcC1wAPA6M2la3yGdyGQtCmOKmyFb1fWPi03DO1Gy/RNKQpHFJI5J"
+           @"GJc2fTg7dkRD1R7abE9+7Ir9A+pukDySdavtzFhJsdUkPtOPN+2SLk/U2358EpoD5QMV724HrgCPABPAXsBx4C6"
+           @"gB34aPAVSBJnBWO9K8PjQMDPrb/+1eE/JnroWcBnwHHDbZF8DdwMsW0QAWAs8DX/udTd+PT0fQp8CHwBDwM/Aoc"
+           @"DXwB3AucDLwicW08BWwEXgROMnRmgTW+o7/oW/ashYk9WpJl0p6P8mnQ5KWJQneE61DIr/p3Nkk6YikQfeonTNp"
+           @"jIHoo4xquzLyCb1sn7t0NdpfKOlhSfslfS/pgKSfJN2ex1k0yx4Ebk32wnokWod8WhE9t7AEeMSfreL0eCPKp0"
+           @"wUNcYXkvV9wF7gTuAW7zWdxDVXX8BVQJ+fp5zgoSCeBRblEeZF6GLgnGi9A9gJrAOWWlDV+3X7hEhcAbwURSv4"
+           @"vOauX3H1XugK/hfyInR9sn7dx4rW8WIZ8IqjNeUrjI3HXJnjjl4/sBU43/alHisdR2hOsm56dq22qHneH3DU9ro"
+           @"t7DJ5iMJn7ks32Iajvqsta07G9yaV9V5k25xRefd6fi2XtEHSusj/CUkDkrZL2pPMxNJlPyeDNCbZmmF/yKV/d"
+           @"uS3yoP1mKRf3Ysq0+1DW0w05is0t6clrZe0wlM9xTZJa9yrnsqw983kgFbzjDrPlRTONvuBzz1sBz0+bsx7SYRh"
+           @"59dIO4eiPjQG3AP86AE76WRe5ORe4Ea5u4SYRkZT7VhQwCGXdr+jNM8RC0fR2zzRrwE25bxjwH+zp4is6JOlCE"
+           @"1ujc/aIXoHfAZqYa7FrfLzkM9Kv5cl6FTQf45Z98u1K6gIXUFF+CcAAP//+wLLKID1wCEAAAAASUVORK5CYII=";
+}
+
 static NSImage *OpenWatcherStatusTemplateImage(void) {
-    if (@available(macOS 11.0, *)) {
-        NSImage *image = [NSImage imageWithSystemSymbolName:@"eye" accessibilityDescription:@"OpenWatcher"];
-        if (image != nil) {
-            image.template = YES;
-            image.size = NSMakeSize(18.0, 18.0);
-            return image;
-        }
+    NSData *data = [[[NSData alloc] initWithBase64EncodedString:OpenWatcherStatusIconBase64() options:0] autorelease];
+    NSImage *embeddedImage = nil;
+    if (data != nil) {
+        embeddedImage = [[[NSImage alloc] initWithData:data] autorelease];
+    }
+    if (embeddedImage != nil) {
+        embeddedImage.size = NSMakeSize(18.0, 18.0);
+        embeddedImage.template = YES;
+        return embeddedImage;
     }
     NSImage *image = [NSImage imageNamed:@"iconfile"];
     if (image == nil) {
