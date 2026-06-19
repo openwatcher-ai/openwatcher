@@ -36,6 +36,7 @@ func main() {
 			TitleBar: mac.TitleBarHiddenInset(),
 		},
 		OnStartup:  app.startup,
+		OnDomReady: app.domReady,
 		OnShutdown: app.shutdown,
 		Bind: []interface{}{
 			app,

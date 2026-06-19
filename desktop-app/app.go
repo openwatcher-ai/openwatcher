@@ -108,6 +108,7 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.processCtx, a.processCancel = context.WithCancel(ctx)
+	a.installStatusItem()
 	desktopSettings, _ := settings.LoadDesktopSettings()
 	if desktopSettings.AutoStartBackend {
 		_ = a.backendManager.StartBackend(a.processContext(), a.backendStartConfig())
@@ -115,6 +116,7 @@ func (a *App) startup(ctx context.Context) {
 	if desktopSettings.DeveloperEnvironment.Enabled {
 		_ = a.ensureDeveloperEnvironmentFromSettings(desktopSettings.DeveloperEnvironment)
 	}
+	a.refreshStatusItem()
 	if a.runtimeManager != nil {
 		go func() {
 			backgroundCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -122,6 +124,12 @@ func (a *App) startup(ctx context.Context) {
 			_ = a.runtimeManager.EnsureAll(backgroundCtx)
 		}()
 	}
+}
+
+func (a *App) domReady(ctx context.Context) {
+	a.ctx = ctx
+	a.installStatusItem()
+	a.refreshStatusItem()
 }
 
 func (a *App) shutdown(context.Context) {

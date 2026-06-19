@@ -106,6 +106,7 @@ func (a *App) stopDeveloperTunnel() DeveloperEnvironmentSnapshot {
 }
 
 func (a *App) emitDesktopStateChanged(source string) {
+	a.refreshStatusItem()
 	if a.ctx == nil {
 		return
 	}
