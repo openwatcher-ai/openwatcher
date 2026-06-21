@@ -790,6 +790,54 @@ button {
   gap: 10px;
 }
 
+.install-guide-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.install-guide-step {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.install-guide-step-index {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(48, 132, 255, 0.16);
+  color: #8ec9ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.install-guide-step-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.install-guide-step-copy strong {
+  color: #d4e1f3;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.install-guide-step-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .install-guide-pill {
   min-height: 60px;
   padding: 12px 14px;
@@ -3240,6 +3288,7 @@ body {
 .install-result-item,
 .install-summary-box,
 .install-config-card,
+.install-guide-step,
 .install-guide-pill {
   background: var(--ui-surface-1);
   border-color: var(--ui-border);
@@ -3259,6 +3308,7 @@ body {
 .brand-text,
 .panel-card h3,
 .install-card-head h3,
+.install-guide-step-copy strong,
 .install-guide-pill-copy strong,
 .top-card-title,
 .top-card-value,
@@ -3275,6 +3325,7 @@ body {
 
 .install-card p,
 .install-config-card p,
+.install-guide-step-copy small,
 .install-guide-pill-copy small,
 .install-guide-pill-link,
 .topbar-status-label,

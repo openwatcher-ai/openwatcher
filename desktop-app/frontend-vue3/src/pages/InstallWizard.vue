@@ -12,8 +12,7 @@ const store = useAppStore()
 const currentStage = computed(() => store.state.wizard.currentStage)
 const selectedDevice = computed(() => store.selectedDevice.value)
 const installerState = computed(() => store.state.installerState)
-const guide = computed(() => INSTALL_GUIDES.find((item) => item.id === store.state.wizard.guide.selectedBrand) || INSTALL_GUIDES[0])
-const guideStep = computed(() => guide.value.steps[store.state.wizard.guide.stepIndex] || guide.value.steps[0])
+const installGuide = computed(() => INSTALL_GUIDES[0])
 const enabledEntries = computed(() => store.selectors.wizardEnabledConfigEntries())
 
 function stageButtonClass(stage) {
@@ -131,25 +130,19 @@ function setEntryField(entryId, field, value) {
             <section class="panel compact-panel">
               <header class="panel-head">
                 <div>
-                  <h2>品牌 / 型号</h2>
-                  <p>选择设备后查看对应教程。</p>
+                  <h2>通用文字教程</h2>
+                  <p>{{ installGuide.subtitle }}</p>
                 </div>
               </header>
-              <div class="guide-list">
-                <button
-                  v-for="item in INSTALL_GUIDES"
-                  :key="item.id"
-                  class="guide-row"
-                  :class="{ 'is-active': item.id === guide.id }"
-                  type="button"
-                  @click="store.state.wizard.guide.selectedBrand = item.id; store.state.wizard.guide.stepIndex = 0; store.state.wizard.guide.modalOpen = true"
-                >
-                  <span>{{ item.icon }}</span>
-                  <strong>{{ item.label }}</strong>
-                  <em>{{ item.models }}</em>
-                  <small>查看教程</small>
-                </button>
-              </div>
+              <ol class="guide-step-list">
+                <li v-for="(step, index) in installGuide.steps" :key="step.title" class="guide-step-item">
+                  <span class="guide-step-index">{{ index + 1 }}</span>
+                  <div class="guide-step-copy">
+                    <strong>{{ step.title }}</strong>
+                    <p>{{ step.body }}</p>
+                  </div>
+                </li>
+              </ol>
             </section>
           </div>
 
@@ -381,41 +374,5 @@ function setEntryField(entryId, field, value) {
       </section>
     </section>
 
-    <div v-if="store.state.wizard.guide.modalOpen" class="modal-backdrop" @click="store.state.wizard.guide.modalOpen = false">
-      <div class="dialog guide-dialog" @click.stop>
-        <header class="dialog-head">
-          <div>
-            <h2>{{ guide.title }}</h2>
-            <p>{{ guide.subtitle }}</p>
-          </div>
-          <button class="icon-chip" type="button" @click="store.state.wizard.guide.modalOpen = false">
-            <AppIcon name="X" :size="16" />
-          </button>
-        </header>
-        <div class="guide-dialog-body">
-          <div class="guide-visual">
-            <div class="guide-frame">{{ guideStep.visual }}</div>
-            <span>步骤 {{ store.state.wizard.guide.stepIndex + 1 }} / {{ guide.steps.length }}</span>
-          </div>
-          <div class="guide-copy">
-            <strong>{{ guideStep.title }}</strong>
-            <p>{{ guideStep.body }}</p>
-            <div class="guide-bullets">
-              <div v-for="(item, index) in guideStep.bullets" :key="item" class="guide-bullet">
-                <span>{{ index + 1 }}</span>
-                <em>{{ item }}</em>
-              </div>
-            </div>
-          </div>
-        </div>
-        <footer class="dialog-foot">
-          <AppButton :disabled="store.state.wizard.guide.stepIndex === 0" @click="store.state.wizard.guide.stepIndex = Math.max(0, store.state.wizard.guide.stepIndex - 1)">上一步</AppButton>
-          <div class="actions right">
-            <AppButton :disabled="store.state.wizard.guide.stepIndex >= guide.steps.length - 1" @click="store.state.wizard.guide.stepIndex = Math.min(guide.steps.length - 1, store.state.wizard.guide.stepIndex + 1)">下一步</AppButton>
-            <AppButton tone="primary" @click="store.state.wizard.guide.modalOpen = false">我知道怎么设置了</AppButton>
-          </div>
-        </footer>
-      </div>
-    </div>
   </section>
 </template>

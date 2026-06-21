@@ -84,7 +84,7 @@ Desktop 可显示当前电脑局域网 IP。
 
 ### 3. EnableDeveloperModeGuide
 
-图文占位：
+通用文字教程：
 
 ```text
 打开手表 设置
@@ -94,18 +94,13 @@ Desktop 可显示当前电脑局域网 IP。
 返回设置页
 ```
 
-不同品牌入口不同，文档和 UI 保留品牌说明占位：
-
-- Xiaomi / HyperOS Watch；
-- OPPO Watch；
-- vivo Watch；
-- Samsung / Wear OS；
-- Pixel Watch；
-- Huawei 设备需单独验证，不默认承诺支持。
+不同品牌入口不同，正式发布前不在 UI 中展示品牌教程入口，也不使用未验证截图占位。
+公开版先保留通用文字路径；品牌教程和截图必须基于真机样本补齐。
+兼容性表不得虚构型号，未验证设备应标注“待验证”。
 
 ### 4. EnableWirelessDebuggingGuide
 
-图文占位：
+通用文字教程：
 
 ```text
 打开 开发者选项
