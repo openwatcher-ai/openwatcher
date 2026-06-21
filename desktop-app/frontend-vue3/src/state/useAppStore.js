@@ -41,6 +41,7 @@ export function createAppStore() {
   let copyFeedbackTimer = null
   let desktopUpdateProgressOff = null
   let desktopStateChangedOff = null
+  let installerProgressTicker = null
 
   const live = computed(() => deriveLiveState(state.snapshot))
   const topbarItems = computed(() => topbarStatusItems(live.value))
@@ -294,6 +295,113 @@ export function createAppStore() {
       return `已检测安装包：${currentInstaller.apk.versionName || "未知版本"}`
     }
     return currentInstaller.apk?.message || "尚未找到可安装的手表 APK。"
+  }
+
+  function installerRuntimeResource(kind) {
+    return state.installerState?.runtime?.resources?.[kind] || null
+  }
+
+  function installerRuntimeResourceActive(kind) {
+    const progress = installerRuntimeResource(kind)
+    return Boolean(progress && !progress.ready && ["checking", "downloading", "verifying", "extracting"].includes(progress.phase))
+  }
+
+  function installerRuntimeProgressActive() {
+    return installerRuntimeResourceActive("platformTools") || installerRuntimeResourceActive("watchApk")
+  }
+
+  function updateInstallerProgressTicker() {
+    if (typeof window === "undefined") {
+      return
+    }
+    if (installerRuntimeProgressActive()) {
+      if (installerProgressTicker) {
+        return
+      }
+      const setIntervalFn = window.setInterval || setInterval
+      installerProgressTicker = setIntervalFn(async () => {
+        state.installerState = await loadInstallerStatus()
+        syncWizardWithInstallerState()
+      }, 1000)
+      return
+    }
+    if (installerProgressTicker) {
+      const clearIntervalFn = window.clearInterval || clearInterval
+      clearIntervalFn(installerProgressTicker)
+      installerProgressTicker = null
+    }
+  }
+
+  function runtimeProgressVisible(progress) {
+    return Boolean(progress && !progress.ready && ["downloading", "verifying", "extracting"].includes(progress.phase))
+  }
+
+  function runtimeProgressPercent(progress) {
+    if (!progress) {
+      return 0
+    }
+    const explicit = Number(progress.percent || 0)
+    if (explicit > 0) {
+      return Math.max(0, Math.min(100, explicit))
+    }
+    const downloaded = Number(progress.downloadedBytes || 0)
+    const total = Number(progress.totalBytes || 0)
+    if (total <= 0 || downloaded <= 0) {
+      return progress.phase === "extracting" || progress.phase === "verifying" ? 100 : 0
+    }
+    return Math.max(0, Math.min(100, Math.round((downloaded / total) * 100)))
+  }
+
+  function runtimeProgressLabel(progress) {
+    if (!progress) {
+      return ""
+    }
+    const message = progress.message || runtimePhaseLabel(progress.phase)
+    const downloaded = Number(progress.downloadedBytes || 0)
+    const total = Number(progress.totalBytes || 0)
+    const sizeLabel = total > 0 && downloaded > 0
+      ? `${formatByteSize(downloaded)} / ${formatByteSize(total)}`
+      : ""
+    const speed = Number(progress.bytesPerSecond || 0)
+    const speedLabel = progress.phase === "downloading" && speed > 0
+      ? `${formatByteSize(speed)}/s`
+      : ""
+    return [message, speedLabel, sizeLabel].filter(Boolean).join(" · ")
+  }
+
+  function runtimePhaseLabel(phase) {
+    if (phase === "downloading") {
+      return "正在下载"
+    }
+    if (phase === "verifying") {
+      return "正在校验"
+    }
+    if (phase === "extracting") {
+      return "正在解压"
+    }
+    if (phase === "error") {
+      return "准备失败"
+    }
+    return "准备中"
+  }
+
+  function runtimeProgressTag(progress, fallback) {
+    if (!progress || progress.ready) {
+      return fallback
+    }
+    if (progress.phase === "downloading") {
+      return "下载中"
+    }
+    if (progress.phase === "verifying") {
+      return "校验中"
+    }
+    if (progress.phase === "extracting") {
+      return "解压中"
+    }
+    if (progress.phase === "error") {
+      return "失败"
+    }
+    return "准备中"
   }
 
   function currentDeveloperHostAlias() {
@@ -711,29 +819,42 @@ export function createAppStore() {
     if (state.installerState?.apk?.installed && !wizardStageCompleted("install")) {
       markWizardStageCompleted("connect", state.wizard.stageNotes.connect || "设备已连接")
     }
+    updateInstallerProgressTicker()
   }
 
   function wizardAutoChecks(currentLive = live.value) {
     const currentInstaller = state.installerState || fallbackInstallerState
     const apkName = currentInstaller.apk?.path ? filenameFromPath(currentInstaller.apk.path) : (currentInstaller.apk?.label || "未检测到安装包")
+    const toolProgress = installerRuntimeResource("platformTools")
+    const apkProgress = installerRuntimeResource("watchApk")
+    const toolProgressVisible = runtimeProgressVisible(toolProgress)
+    const apkProgressVisible = runtimeProgressVisible(apkProgress)
     return [
       {
         id: "tool",
         label: "安装工具可用",
         ok: Boolean(currentInstaller.adb?.available),
-        tag: currentInstaller.adb?.available ? "已就绪" : "未就绪",
+        tag: currentInstaller.adb?.available ? "已就绪" : runtimeProgressTag(toolProgress, "未就绪"),
         detail: currentInstaller.adb?.available
           ? ["已缓存到本机", `版本 ${currentInstaller.adb?.version || "已找到"}`]
-          : [currentInstaller.adb?.message || "未检测到安装工具"]
+          : (toolProgressVisible ? [] : [currentInstaller.adb?.message || toolProgress?.message || "未检测到安装工具"]),
+        progress: toolProgressVisible ? {
+          percent: runtimeProgressPercent(toolProgress),
+          label: runtimeProgressLabel(toolProgress)
+        } : null
       },
       {
         id: "package",
         label: "手表安装包可用",
         ok: Boolean(currentInstaller.apk?.available),
-        tag: currentInstaller.apk?.available ? "已就绪" : "未就绪",
+        tag: currentInstaller.apk?.available ? "已就绪" : runtimeProgressTag(apkProgress, "未就绪"),
         detail: currentInstaller.apk?.available
           ? [`文件 ${apkName}`, `版本 ${currentInstaller.apk?.versionName || "未知版本"} · ${currentInstaller.apk?.debug ? "debug" : "release"}`]
-          : [currentInstaller.apk?.message || "未检测到安装包"]
+          : (apkProgressVisible ? [] : [currentInstaller.apk?.message || apkProgress?.message || "未检测到安装包"]),
+        progress: apkProgressVisible ? {
+          percent: runtimeProgressPercent(apkProgress),
+          label: runtimeProgressLabel(apkProgress)
+        } : null
       },
       {
         id: "backend",
@@ -1665,6 +1786,7 @@ export function createAppStore() {
     }
     state.snapshot = await invoke("EnsureRuntimeDependencies")
     state.installerState = await loadInstallerStatus()
+    syncWizardWithInstallerState()
   }
 
   function buildGlobalHealthTargets(currentLive, developerSnapshot, auxiliaryChecks = {}) {

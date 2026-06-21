@@ -39,6 +39,42 @@ type Manager struct {
 	lastFetchedAt time.Time
 
 	ensureMu sync.Mutex
+
+	progressMu sync.Mutex
+	progress   map[ResourceKind]ResourceProgress
+
+	asyncMu       sync.Mutex
+	ensureRunning bool
+}
+
+type ResourcePhase string
+
+const (
+	ResourcePhaseChecking    ResourcePhase = "checking"
+	ResourcePhaseDownloading ResourcePhase = "downloading"
+	ResourcePhaseVerifying   ResourcePhase = "verifying"
+	ResourcePhaseExtracting  ResourcePhase = "extracting"
+	ResourcePhaseReady       ResourcePhase = "ready"
+	ResourcePhaseError       ResourcePhase = "error"
+)
+
+type ResourceProgress struct {
+	Kind           string        `json:"kind"`
+	Artifact       string        `json:"artifact,omitempty"`
+	Version        string        `json:"version,omitempty"`
+	Phase          ResourcePhase `json:"phase"`
+	Ready          bool          `json:"ready"`
+	Downloaded     int64         `json:"downloadedBytes,omitempty"`
+	Total          int64         `json:"totalBytes,omitempty"`
+	Percent        int           `json:"percent,omitempty"`
+	BytesPerSecond int64         `json:"bytesPerSecond,omitempty"`
+	Message        string        `json:"message,omitempty"`
+	UpdatedAt      string        `json:"updatedAt,omitempty"`
+}
+
+type Status struct {
+	Platform  string                      `json:"platform"`
+	Resources map[string]ResourceProgress `json:"resources"`
 }
 
 type resourceState struct {
@@ -65,6 +101,49 @@ func NewManager(appRoot string, desktopVersion string) *Manager {
 		httpClient:         &http.Client{Timeout: 90 * time.Second},
 		now:                time.Now,
 		fetchTTL:           15 * time.Minute,
+		progress:           make(map[ResourceKind]ResourceProgress),
+	}
+}
+
+func (m *Manager) StartEnsureInstaller() {
+	m.startEnsure(ResourcePlatformTools, ResourceWatchAPK)
+}
+
+func (m *Manager) StartEnsureAll() {
+	m.startEnsure(ResourcePlatformTools, ResourceWatchAPK, ResourceCloudflared)
+}
+
+func (m *Manager) startEnsure(kinds ...ResourceKind) {
+	m.asyncMu.Lock()
+	if m.ensureRunning {
+		m.asyncMu.Unlock()
+		return
+	}
+	m.ensureRunning = true
+	m.asyncMu.Unlock()
+
+	go func() {
+		defer func() {
+			m.asyncMu.Lock()
+			m.ensureRunning = false
+			m.asyncMu.Unlock()
+		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		_ = m.ensure(ctx, kinds...)
+	}()
+}
+
+func (m *Manager) Status() Status {
+	m.progressMu.Lock()
+	defer m.progressMu.Unlock()
+	resources := make(map[string]ResourceProgress, len(m.progress))
+	for kind, progress := range m.progress {
+		resources[string(kind)] = progress
+	}
+	return Status{
+		Platform:  m.platform,
+		Resources: resources,
 	}
 }
 
@@ -166,18 +245,24 @@ func (m *Manager) writeCurrentManifest(manifest Manifest) error {
 func (m *Manager) ensureResource(ctx context.Context, manifest Manifest, kind ResourceKind) error {
 	resource, err := manifest.Resource(kind, m.platform)
 	if err != nil {
+		m.setResourceError(kind, ResourceDescriptor{}, err)
 		return err
 	}
+	m.setResourceProgress(kind, resource, ResourcePhaseChecking, 0, resource.SizeBytes, 0, false, resourceCheckingMessage(kind))
 	switch kind {
 	case ResourceWatchAPK:
-		return m.ensureWatchAPK(ctx, resource)
+		err = m.ensureWatchAPK(ctx, resource)
 	case ResourcePlatformTools:
-		return m.ensureArchiveResource(ctx, kind, resource, filepath.Join("platform-tools", m.platform))
+		err = m.ensureArchiveResource(ctx, kind, resource, filepath.Join("platform-tools", m.platform))
 	case ResourceCloudflared:
-		return m.ensureArchiveResource(ctx, kind, resource, filepath.Join("cloudflared", m.platform))
+		err = m.ensureArchiveResource(ctx, kind, resource, filepath.Join("cloudflared", m.platform))
 	default:
-		return fmt.Errorf("未知 runtime 资源类型：%s", kind)
+		err = fmt.Errorf("未知 runtime 资源类型：%s", kind)
 	}
+	if err != nil {
+		m.setResourceError(kind, resource, err)
+	}
+	return err
 }
 
 func (m *Manager) ensureWatchAPK(ctx context.Context, resource ResourceDescriptor) error {
@@ -190,14 +275,16 @@ func (m *Manager) ensureWatchAPK(ctx context.Context, resource ResourceDescripto
 	statePath := filepath.Join(targetDir, "metadata.json")
 	if stateMatches(statePath, ResourceWatchAPK, m.platform, resource) {
 		if info, err := os.Stat(targetPath); err == nil && !info.IsDir() {
+			m.setResourceReady(ResourceWatchAPK, resource, "手表安装包已就绪")
 			return nil
 		}
 	}
 
-	downloadPath, err := m.ensureDownload(ctx, resource)
+	downloadPath, err := m.ensureDownload(ctx, ResourceWatchAPK, resource)
 	if err != nil {
 		return err
 	}
+	m.setResourceProgress(ResourceWatchAPK, resource, ResourcePhaseVerifying, resource.SizeBytes, resource.SizeBytes, 0, false, "正在写入手表安装包")
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return err
 	}
@@ -210,7 +297,11 @@ func (m *Manager) ensureWatchAPK(ctx context.Context, resource ResourceDescripto
 		_ = os.Remove(tmpPath)
 		return err
 	}
-	return writeResourceState(statePath, ResourceWatchAPK, m.platform, resource, m.now())
+	if err := writeResourceState(statePath, ResourceWatchAPK, m.platform, resource, m.now()); err != nil {
+		return err
+	}
+	m.setResourceReady(ResourceWatchAPK, resource, "手表安装包已就绪")
+	return nil
 }
 
 func (m *Manager) ensureArchiveResource(ctx context.Context, kind ResourceKind, resource ResourceDescriptor, relativeTarget string) error {
@@ -221,10 +312,11 @@ func (m *Manager) ensureArchiveResource(ctx context.Context, kind ResourceKind, 
 	targetDir := filepath.Join(runtimeRoot, filepath.FromSlash(relativeTarget))
 	statePath := filepath.Join(targetDir, ".resource.json")
 	if stateMatches(statePath, kind, m.platform, resource) && resourceFilesReady(targetDir, resource) {
+		m.setResourceReady(kind, resource, resourceReadyMessage(kind))
 		return nil
 	}
 
-	downloadPath, err := m.ensureDownload(ctx, resource)
+	downloadPath, err := m.ensureDownload(ctx, kind, resource)
 	if err != nil {
 		return err
 	}
@@ -244,10 +336,12 @@ func (m *Manager) ensureArchiveResource(ctx context.Context, kind ResourceKind, 
 	}()
 	switch strings.ToLower(strings.TrimSpace(resource.ArchiveKind)) {
 	case "zip":
+		m.setResourceProgress(kind, resource, ResourcePhaseExtracting, resource.SizeBytes, resource.SizeBytes, 0, false, resourceExtractingMessage(kind))
 		if err := extractZip(downloadPath, tempDir, archiveStripPrefix(resource.BinRelativePath)); err != nil {
 			return err
 		}
 	case "tgz":
+		m.setResourceProgress(kind, resource, ResourcePhaseExtracting, resource.SizeBytes, resource.SizeBytes, 0, false, resourceExtractingMessage(kind))
 		if err := extractTGZ(downloadPath, tempDir, archiveStripPrefix(resource.BinRelativePath)); err != nil {
 			return err
 		}
@@ -265,10 +359,11 @@ func (m *Manager) ensureArchiveResource(ctx context.Context, kind ResourceKind, 
 		return err
 	}
 	ok = true
+	m.setResourceReady(kind, resource, resourceReadyMessage(kind))
 	return nil
 }
 
-func (m *Manager) ensureDownload(ctx context.Context, resource ResourceDescriptor) (string, error) {
+func (m *Manager) ensureDownload(ctx context.Context, kind ResourceKind, resource ResourceDescriptor) (string, error) {
 	runtimeRoot, err := m.RuntimeRoot()
 	if err != nil {
 		return "", err
@@ -279,6 +374,7 @@ func (m *Manager) ensureDownload(ctx context.Context, resource ResourceDescripto
 	}
 	targetPath := filepath.Join(downloadsDir, resource.Artifact)
 	if match, _ := fileMatchesSHA256(targetPath, resource.SHA256); match {
+		m.setResourceProgress(kind, resource, ResourcePhaseVerifying, resource.SizeBytes, resource.SizeBytes, 0, false, resourceCachedMessage(kind))
 		return targetPath, nil
 	}
 	_ = os.Remove(targetPath)
@@ -300,7 +396,12 @@ func (m *Manager) ensureDownload(ctx context.Context, resource ResourceDescripto
 	if err != nil {
 		return "", err
 	}
-	if _, err := io.Copy(file, resp.Body); err != nil {
+	totalBytes := resource.SizeBytes
+	if resp.ContentLength > 0 {
+		totalBytes = resp.ContentLength
+	}
+	m.setResourceProgress(kind, resource, ResourcePhaseDownloading, 0, totalBytes, 0, false, resourceDownloadingMessage(kind))
+	if err := m.copyDownloadWithProgress(ctx, kind, resource, file, resp.Body, totalBytes); err != nil {
 		file.Close()
 		_ = os.Remove(tmpPath)
 		return "", fmt.Errorf("写入资源文件失败")
@@ -324,11 +425,131 @@ func (m *Manager) ensureDownload(ctx context.Context, resource ResourceDescripto
 		_ = os.Remove(tmpPath)
 		return "", fmt.Errorf("下载资源校验失败：%s", resource.Artifact)
 	}
+	m.setResourceProgress(kind, resource, ResourcePhaseVerifying, totalBytes, totalBytes, 0, false, resourceVerifyingMessage(kind))
 	if err := os.Rename(tmpPath, targetPath); err != nil {
 		_ = os.Remove(tmpPath)
 		return "", err
 	}
 	return targetPath, nil
+}
+
+func (m *Manager) copyDownloadWithProgress(ctx context.Context, kind ResourceKind, resource ResourceDescriptor, target *os.File, source io.Reader, totalBytes int64) error {
+	buffer := make([]byte, 32*1024)
+	startedAt := time.Now()
+	lastReportedAt := startedAt
+	var downloaded int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		n, readErr := source.Read(buffer)
+		if n > 0 {
+			if _, err := target.Write(buffer[:n]); err != nil {
+				return err
+			}
+			downloaded += int64(n)
+			now := time.Now()
+			if now.Sub(lastReportedAt) >= 150*time.Millisecond || downloaded == totalBytes {
+				m.setResourceProgress(kind, resource, ResourcePhaseDownloading, downloaded, totalBytes, downloadSpeed(downloaded, startedAt, now), false, resourceDownloadingMessage(kind))
+				lastReportedAt = now
+			}
+		}
+		if readErr == io.EOF {
+			m.setResourceProgress(kind, resource, ResourcePhaseDownloading, downloaded, totalBytes, downloadSpeed(downloaded, startedAt, time.Now()), false, resourceDownloadingMessage(kind))
+			return nil
+		}
+		if readErr != nil {
+			return readErr
+		}
+	}
+}
+
+func downloadSpeed(downloaded int64, startedAt time.Time, now time.Time) int64 {
+	elapsed := now.Sub(startedAt).Seconds()
+	if elapsed <= 0 {
+		return 0
+	}
+	return int64(float64(downloaded) / elapsed)
+}
+
+func (m *Manager) setResourceReady(kind ResourceKind, resource ResourceDescriptor, message string) {
+	m.setResourceProgress(kind, resource, ResourcePhaseReady, resource.SizeBytes, resource.SizeBytes, 0, true, message)
+}
+
+func (m *Manager) setResourceError(kind ResourceKind, resource ResourceDescriptor, err error) {
+	message := "资源准备失败"
+	if err != nil {
+		message = err.Error()
+	}
+	m.setResourceProgress(kind, resource, ResourcePhaseError, 0, resource.SizeBytes, 0, false, message)
+}
+
+func (m *Manager) setResourceProgress(kind ResourceKind, resource ResourceDescriptor, phase ResourcePhase, downloaded int64, total int64, bytesPerSecond int64, ready bool, message string) {
+	if total <= 0 {
+		total = resource.SizeBytes
+	}
+	if ready && downloaded <= 0 {
+		downloaded = total
+	}
+	percent := 0
+	if total > 0 && downloaded > 0 {
+		percent = int(downloaded * 100 / total)
+		if percent > 100 {
+			percent = 100
+		}
+	}
+	m.progressMu.Lock()
+	defer m.progressMu.Unlock()
+	m.progress[kind] = ResourceProgress{
+		Kind:           string(kind),
+		Artifact:       resource.Artifact,
+		Version:        resource.Version,
+		Phase:          phase,
+		Ready:          ready,
+		Downloaded:     downloaded,
+		Total:          total,
+		Percent:        percent,
+		BytesPerSecond: bytesPerSecond,
+		Message:        message,
+		UpdatedAt:      m.now().UTC().Format(time.RFC3339),
+	}
+}
+
+func resourceCheckingMessage(kind ResourceKind) string {
+	return resourceLabel(kind) + "检查中"
+}
+
+func resourceDownloadingMessage(kind ResourceKind) string {
+	return "正在下载" + resourceLabel(kind)
+}
+
+func resourceVerifyingMessage(kind ResourceKind) string {
+	return resourceLabel(kind) + "校验中"
+}
+
+func resourceExtractingMessage(kind ResourceKind) string {
+	return resourceLabel(kind) + "解压中"
+}
+
+func resourceCachedMessage(kind ResourceKind) string {
+	return resourceLabel(kind) + "下载包已缓存"
+}
+
+func resourceReadyMessage(kind ResourceKind) string {
+	return resourceLabel(kind) + "已就绪"
+}
+
+func resourceLabel(kind ResourceKind) string {
+	switch kind {
+	case ResourcePlatformTools:
+		return "安装工具"
+	case ResourceWatchAPK:
+		return "手表安装包"
+	case ResourceCloudflared:
+		return "托管隧道组件"
+	default:
+		return "运行时资源"
+	}
 }
 
 func resolveChannelManifestURL(appRoot string) string {

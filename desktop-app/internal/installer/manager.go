@@ -56,15 +56,16 @@ type APKInfo struct {
 }
 
 type Status struct {
-	ADB            adb.Status   `json:"adb"`
-	Devices        []adb.Device `json:"devices"`
-	SelectedSerial string       `json:"selectedSerial,omitempty"`
-	SelectedLabel  string       `json:"selectedLabel,omitempty"`
-	SelectedPort   int          `json:"selectedPort,omitempty"`
-	APK            APKInfo      `json:"apk"`
-	Phase          Phase        `json:"phase"`
-	Message        string       `json:"message,omitempty"`
-	Logs           []LogLine    `json:"logs"`
+	ADB            adb.Status            `json:"adb"`
+	Devices        []adb.Device          `json:"devices"`
+	SelectedSerial string                `json:"selectedSerial,omitempty"`
+	SelectedLabel  string                `json:"selectedLabel,omitempty"`
+	SelectedPort   int                   `json:"selectedPort,omitempty"`
+	APK            APKInfo               `json:"apk"`
+	Runtime        desktopruntime.Status `json:"runtime"`
+	Phase          Phase                 `json:"phase"`
+	Message        string                `json:"message,omitempty"`
+	Logs           []LogLine             `json:"logs"`
 }
 
 type PairRequest struct {
@@ -99,7 +100,7 @@ func NewManager(adbService *adb.Service, locator *APKLocator, runtimeManager *de
 }
 
 func (m *Manager) Status(ctx context.Context) Status {
-	runtimeErr := m.ensureRuntime(ctx)
+	runtimeStatus := m.ensureRuntime()
 	adbStatus := m.adb.Status(ctx)
 	devices := []adb.Device{}
 	if adbStatus.Available {
@@ -127,16 +128,18 @@ func (m *Manager) Status(ctx context.Context) Status {
 
 	selectedLabel := adb.DeviceLabelForSerial(devices, selectedSerial)
 	apkInfo := m.locator.Resolve()
-	if runtimeErr != "" {
-		if !adbStatus.Available {
-			adbStatus.Message = runtimeErr
+	if !adbStatus.Available {
+		if runtimeMessage := runtimeResourceMessage(runtimeStatus, desktopruntime.ResourcePlatformTools); runtimeMessage != "" {
+			adbStatus.Message = runtimeMessage
 		}
-		if !apkInfo.Available {
-			apkInfo.Message = runtimeErr
+	}
+	if !apkInfo.Available {
+		if runtimeMessage := runtimeResourceMessage(runtimeStatus, desktopruntime.ResourceWatchAPK); runtimeMessage != "" {
+			apkInfo.Message = runtimeMessage
 		}
-		if message == "" && (!adbStatus.Available || !apkInfo.Available) {
-			message = runtimeErr
-		}
+	}
+	if message == "" && (!adbStatus.Available || !apkInfo.Available) {
+		message = firstRuntimeResourceMessage(runtimeStatus, !adbStatus.Available, !apkInfo.Available)
 	}
 	if selectedSerial != "" && apkInfo.PackageName != "" {
 		if packageInfo, _, err := m.adb.InspectPackage(ctx, selectedSerial, apkInfo.PackageName); err == nil {
@@ -152,20 +155,55 @@ func (m *Manager) Status(ctx context.Context) Status {
 		SelectedLabel:  selectedLabel,
 		SelectedPort:   adb.PortFromSerial(selectedSerial),
 		APK:            apkInfo,
+		Runtime:        runtimeStatus,
 		Phase:          phase,
 		Message:        message,
 		Logs:           logs,
 	}
 }
 
-func (m *Manager) ensureRuntime(ctx context.Context) string {
+func (m *Manager) ensureRuntime() desktopruntime.Status {
 	if m.runtime == nil {
-		return ""
+		return desktopruntime.Status{}
 	}
-	if err := m.runtime.EnsureInstaller(ctx); err != nil {
-		return err.Error()
+	m.runtime.StartEnsureInstaller()
+	return m.runtime.Status()
+}
+
+func firstRuntimeResourceMessage(status desktopruntime.Status, needsPlatformTools bool, needsWatchAPK bool) string {
+	if needsPlatformTools {
+		if message := runtimeResourceMessage(status, desktopruntime.ResourcePlatformTools); message != "" {
+			return message
+		}
+	}
+	if needsWatchAPK {
+		if message := runtimeResourceMessage(status, desktopruntime.ResourceWatchAPK); message != "" {
+			return message
+		}
 	}
 	return ""
+}
+
+func runtimeResourceMessage(status desktopruntime.Status, kind desktopruntime.ResourceKind) string {
+	progress, ok := status.Resources[string(kind)]
+	if !ok {
+		return ""
+	}
+	if progress.Message != "" {
+		return progress.Message
+	}
+	switch progress.Phase {
+	case desktopruntime.ResourcePhaseDownloading:
+		return "正在下载运行时资源"
+	case desktopruntime.ResourcePhaseExtracting:
+		return "正在解压运行时资源"
+	case desktopruntime.ResourcePhaseVerifying:
+		return "正在校验运行时资源"
+	case desktopruntime.ResourcePhaseError:
+		return "运行时资源准备失败"
+	default:
+		return ""
+	}
 }
 
 func (m *Manager) SelectDevice(serial string) {

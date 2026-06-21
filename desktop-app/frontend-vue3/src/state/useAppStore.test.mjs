@@ -213,6 +213,49 @@ test("手动刷新设备列表会给出提示", async () => {
   assert.match(store.state.notifications[0]?.detail || "", /ADB 设备状态已刷新/)
 })
 
+test("准备清单会显示安装资源下载进度和速度", () => {
+  const localStorage = createLocalStorage()
+  installBrowserGlobals({
+    localStorage,
+    appMethods: {},
+    clipboard: {
+      writeText: async () => {}
+    }
+  })
+
+  const store = createAppStore()
+  store.state.installerState = {
+    ...store.state.installerState,
+    adb: {
+      available: false,
+      message: "正在下载安装工具"
+    },
+    runtime: {
+      platform: "windows-amd64",
+      resources: {
+        platformTools: {
+          kind: "platformTools",
+          phase: "downloading",
+          ready: false,
+          downloadedBytes: 1048576,
+          totalBytes: 4194304,
+          percent: 25,
+          bytesPerSecond: 524288,
+          message: "正在下载安装工具"
+        }
+      }
+    }
+  }
+
+  const checks = store.selectors.wizardAutoChecks(store.live.value)
+  const tool = checks.find((item) => item.id === "tool")
+
+  assert.equal(tool.tag, "下载中")
+  assert.equal(tool.progress.percent, 25)
+  assert.match(tool.progress.label, /512 KB\/s/)
+  assert.match(tool.progress.label, /1\.0 MB \/ 4\.0 MB/)
+})
+
 test("手动全局健康检查完成后会给出提示", async () => {
   const localStorage = createLocalStorage()
   installBrowserGlobals({

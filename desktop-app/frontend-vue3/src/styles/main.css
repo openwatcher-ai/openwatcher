@@ -1227,6 +1227,7 @@ button:disabled {
 }
 
 .check-item {
+  min-width: 0;
   min-height: 72px;
   padding: 10px;
   display: grid;
@@ -1248,6 +1249,53 @@ button:disabled {
   background: rgba(16, 50, 31, 0.28);
 }
 
+.download-progress {
+  min-width: 0;
+  margin-top: 2px;
+  display: grid;
+  gap: 5px;
+}
+
+.download-progress-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.download-progress-head span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-progress-head strong {
+  flex: 0 0 auto;
+  color: #dbeafe;
+  font-size: 12px;
+}
+
+.download-progress-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.download-progress-track span {
+  display: block;
+  height: 100%;
+  min-width: 5px;
+  border-radius: inherit;
+  background: #3b82f6;
+  transition: width 180ms ease;
+}
+
 .check-top {
   display: flex;
   align-items: flex-start;
@@ -1263,6 +1311,7 @@ button:disabled {
 }
 
 .check-top strong {
+  min-width: 0;
   flex: 1 1 auto;
   font-size: 13px;
   line-height: 1.35;
@@ -2101,6 +2150,14 @@ button:disabled {
 :root[data-theme="light"] .check-item {
   border-color: var(--border-muted);
   background: var(--surface-soft);
+}
+
+:root[data-theme="light"] .download-progress-track {
+  background: #d8e2ef;
+}
+
+:root[data-theme="light"] .download-progress-head strong {
+  color: #174ea6;
 }
 
 :root[data-theme="light"] .guide-row.is-active,

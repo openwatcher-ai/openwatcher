@@ -137,6 +137,27 @@ const mockInstallerState = {
     devFallback: false,
     message: "release APK 已就绪"
   },
+  runtime: {
+    platform: "darwin-arm64",
+    resources: {
+      platformTools: {
+        kind: "platformTools",
+        artifact: "platform-tools-darwin-arm64.zip",
+        phase: "ready",
+        ready: true,
+        percent: 100,
+        message: "安装工具已就绪"
+      },
+      watchApk: {
+        kind: "watchApk",
+        artifact: "openwatcher-watch-release.apk",
+        phase: "ready",
+        ready: true,
+        percent: 100,
+        message: "手表安装包已就绪"
+      }
+    }
+  },
   phase: "idle",
   message: "手表已连接。",
   logs: [

@@ -118,11 +118,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.refreshStatusItem()
 	if a.runtimeManager != nil {
-		go func() {
-			backgroundCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
-			_ = a.runtimeManager.EnsureAll(backgroundCtx)
-		}()
+		a.runtimeManager.StartEnsureAll()
 	}
 }
 

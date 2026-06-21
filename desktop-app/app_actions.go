@@ -393,9 +393,7 @@ func (a *App) combinedDeveloperLogs(limit int) []devenv.LogLine {
 
 func (a *App) EnsureRuntimeDependencies() Snapshot {
 	if a.runtimeManager != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		_ = a.runtimeManager.EnsureAll(ctx)
+		a.runtimeManager.StartEnsureAll()
 	}
 	return a.GetSnapshot()
 }

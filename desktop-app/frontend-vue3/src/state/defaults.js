@@ -195,6 +195,10 @@ export const fallbackInstallerState = {
     devFallback: false,
     message: "未检测到可安装 APK"
   },
+  runtime: {
+    platform: "",
+    resources: {}
+  },
   phase: "idle",
   message: "",
   logs: []

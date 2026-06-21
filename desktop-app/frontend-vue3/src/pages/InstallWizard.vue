@@ -85,6 +85,15 @@ function setEntryField(entryId, field, value) {
                       <ToneChip :tone="item.ok ? 'ok' : 'warn'">{{ item.tag }}</ToneChip>
                     </div>
                     <span v-for="detail in item.detail" :key="detail" class="muted-line">{{ detail }}</span>
+                    <div v-if="item.progress" class="download-progress" :aria-label="item.progress.label">
+                      <div class="download-progress-head">
+                        <span>{{ item.progress.label }}</span>
+                        <strong>{{ item.progress.percent }}%</strong>
+                      </div>
+                      <div class="download-progress-track">
+                        <span :style="{ width: `${item.progress.percent}%` }"></span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
