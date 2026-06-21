@@ -53,11 +53,9 @@
 - 对外主入口：OpenWatcher Desktop。
 - 当前公开技术预览不把 Google Play 或厂商手表商店作为首要安装渠道。
 - 仓库内保留 Desktop 侧托管隧道兑换与本地 `cloudflared` 运行逻辑；控制面部署细节不包含在公开仓。
-- 当前 Product Release：`beta-2026.06.16.1`。
-- 当前 Runtime Release：`runtime-v0.1.0`。
-- 当前公开 release commit：`130013e3eb29bff4eb20b6b293278ebd6f04ce47`。
-- Windows x64 release 安装器主路径已完成真实验收。
-- 手表真机安装、启动和运行时配置写入已完成真实验收；公网模式与更多机型兼容性仍需继续补充样本。
+- 当前发布事实以 GitHub Releases、`https://openwatcher.ai/channels/beta.json` 和 `https://openwatcher.ai/changelog.json` 为准。
+- 正式发布初始化后，公开文档不保留清理前旧 beta、旧 runtime 或旧 changelog 作为当前版本记录。
+- Windows、Watch 真机、公网模式与更多机型兼容性样本以本次正式发布后的验收记录为准。
 
 ## 阅读建议
 
