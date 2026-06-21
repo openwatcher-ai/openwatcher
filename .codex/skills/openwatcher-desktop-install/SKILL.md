@@ -42,6 +42,7 @@ description: 在 macOS 或 Windows 上为用户下载、校验、安装并启动
 - 如已存在同名应用，默认覆盖该应用。
 - 只对 `/Applications/OpenWatcher.app` 执行 `xattr -dr com.apple.quarantine`。
 - 使用 `open /Applications/OpenWatcher.app` 启动应用。
+- 如果 macOS 26 及更新版本仍拦截本地未公证构建，先检查系统日志是否出现 `AppleSystemPolicy` 和 `com.apple.provenance`。Codex 进程无法删除该属性时，可让已授予 Full Disk Access 的 Terminal.app 仅对 `/Applications/OpenWatcher.app` 执行 `xattr -cr /Applications/OpenWatcher.app`，然后再启动；不要扩大到其他应用。
 
 不得关闭全局 Gatekeeper，不得执行 `spctl --master-disable`，不得对 OpenWatcher 之外的应用移除 quarantine。
 
