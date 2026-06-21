@@ -105,6 +105,17 @@ func TestManagerEnsureAll(t *testing.T) {
 	if manifest.Resources.WatchAPK.VersionName != "0.19.3" {
 		t.Fatalf("unexpected cached manifest watch version: %+v", manifest.Resources.WatchAPK)
 	}
+
+	status := manager.Status()
+	for _, kind := range []ResourceKind{ResourcePlatformTools, ResourceWatchAPK, ResourceCloudflared} {
+		progress, ok := status.Resources[string(kind)]
+		if !ok {
+			t.Fatalf("missing runtime progress for %s: %+v", kind, status.Resources)
+		}
+		if !progress.Ready || progress.Phase != ResourcePhaseReady {
+			t.Fatalf("progress for %s = %+v, want ready", kind, progress)
+		}
+	}
 }
 
 func TestEnsureUsesCachedManifestWhenRemoteUnavailable(t *testing.T) {

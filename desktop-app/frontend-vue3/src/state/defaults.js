@@ -1,5 +1,3 @@
-import { INSTALL_GUIDES } from "../data/installGuides.js"
-
 export const DEFAULT_SIDECAR_PORT = "8787"
 export const DEFAULT_DEV_SIDECAR_PORT = "18787"
 export const GLOBAL_HEALTH_INTERVAL_MS = 15000
@@ -197,6 +195,10 @@ export const fallbackInstallerState = {
     devFallback: false,
     message: "未检测到可安装 APK"
   },
+  runtime: {
+    platform: "",
+    resources: {}
+  },
   phase: "idle",
   message: "",
   logs: []
@@ -368,11 +370,6 @@ export function createInitialState() {
         developer: false,
         wireless: false,
         pairPage: false
-      },
-      guide: {
-        selectedBrand: INSTALL_GUIDES[0]?.id || "xiaomi",
-        modalOpen: false,
-        stepIndex: 0
       },
       suggestedLanURL: suggestedLanURL(fallbackSnapshot),
       configEntries: createInstallConfigEntries(fallbackSnapshot)

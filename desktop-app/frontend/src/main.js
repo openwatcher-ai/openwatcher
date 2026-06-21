@@ -286,11 +286,6 @@ const pageState = {
       wireless: false,
       pairPage: false
     },
-    guide: {
-      selectedBrand: INSTALL_GUIDES[0]?.id || "xiaomi",
-      modalOpen: false,
-      stepIndex: 0
-    },
     suggestedLanURL: suggestedLanURL(fallbackSnapshot),
     configEntries: createInstallConfigEntries(fallbackSnapshot)
   },
@@ -1763,15 +1758,6 @@ function wizardConnectReady() {
   return Boolean(selectedInstallerDevice()) && !installerSelectionRequired()
 }
 
-function wizardSelectedGuide() {
-  return INSTALL_GUIDES.find((guide) => guide.id === pageState.wizard.guide.selectedBrand) || INSTALL_GUIDES[0]
-}
-
-function wizardGuideStep() {
-  const guide = wizardSelectedGuide()
-  return guide.steps[pageState.wizard.guide.stepIndex] || guide.steps[0]
-}
-
 function wizardConfigEntry(entryId) {
   return pageState.wizard.configEntries[entryId]
 }
@@ -2232,62 +2218,6 @@ function renderWizardFailureNotice() {
   `
 }
 
-function renderInstallGuideModal() {
-  const guide = wizardSelectedGuide()
-  const step = wizardGuideStep()
-  if (!pageState.wizard.guide.modalOpen || !guide || !step) {
-    return ""
-  }
-  return `
-    <div class="install-guide-modal" data-command="wizard-close-guide">
-      <div class="install-guide-dialog" data-stop-click="true">
-        <div class="install-guide-head">
-          <div>
-            <h3>${escapeHtml(guide.title)}</h3>
-            <p>${escapeHtml(guide.subtitle)}</p>
-          </div>
-          <button class="install-guide-close" data-command="wizard-close-guide">✕</button>
-        </div>
-        <div class="install-guide-body">
-          <div class="install-guide-visual">
-            <div class="install-guide-frame">
-              <div class="install-guide-window">
-                <div class="install-guide-window-top"><span></span><span></span><span></span></div>
-                <div class="install-guide-window-body">${escapeHtml(step.visual)}</div>
-              </div>
-            </div>
-            <div class="install-guide-progress">
-              <span>步骤 ${pageState.wizard.guide.stepIndex + 1} / ${guide.steps.length}</span>
-              <div class="install-guide-dots">
-                ${guide.steps.map((_, index) => `<span class="install-guide-dot ${index === pageState.wizard.guide.stepIndex ? "is-active" : ""}"></span>`).join("")}
-              </div>
-            </div>
-          </div>
-          <div class="install-guide-copy">
-            <strong>${escapeHtml(step.title)}</strong>
-            <p>${escapeHtml(step.body)}</p>
-            <div class="install-guide-bullets">
-              ${step.bullets.map((item, index) => `
-                <div class="install-guide-bullet">
-                  <span class="install-guide-bullet-index">${index + 1}</span>
-                  <span>${escapeHtml(item)}</span>
-                </div>
-              `).join("")}
-            </div>
-          </div>
-        </div>
-        <div class="install-guide-foot">
-          <button class="secondary-btn" data-command="wizard-guide-prev" ${pageState.wizard.guide.stepIndex === 0 ? "disabled" : ""}>上一步</button>
-          <div class="install-guide-foot-actions">
-            <button class="secondary-btn" data-command="wizard-guide-next" ${pageState.wizard.guide.stepIndex >= guide.steps.length - 1 ? "disabled" : ""}>下一步</button>
-            <button class="primary-btn" data-command="wizard-close-guide">我知道怎么设置了</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `
-}
-
 function renderInstallStageTabs() {
   return `
     <div class="install-stage-tabs">
@@ -2315,7 +2245,7 @@ function renderInstallStageTabs() {
 
 function renderPrepareStage(live) {
   const autoChecks = wizardAutoChecks(live)
-  const guide = wizardSelectedGuide()
+  const guide = INSTALL_GUIDES[0]
   return `
     <div class="install-stage-layout prepare">
       <article class="install-card">
@@ -2371,22 +2301,21 @@ function renderPrepareStage(live) {
       <article class="install-card">
         <div class="install-card-head">
           <div>
-            <h3>品牌 / 型号</h3>
-            <p>先选你的设备，再查看对应的图文教程。</p>
+            <h3>通用文字教程</h3>
+            <p>${escapeHtml(guide.subtitle)}</p>
           </div>
         </div>
-        <div class="install-guide-grid">
-          ${INSTALL_GUIDES.map((item) => `
-            <button class="install-guide-pill ${item.id === guide.id ? "is-active" : ""}" data-command="wizard-open-guide" data-value="${item.id}">
-              <span class="install-guide-pill-icon">${item.icon}</span>
-              <span class="install-guide-pill-copy">
-                <strong>${escapeHtml(item.label)}</strong>
-                <small>${escapeHtml(item.models)}</small>
+        <ol class="install-guide-steps">
+          ${guide.steps.map((step, index) => `
+            <li class="install-guide-step">
+              <span class="install-guide-step-index">${index + 1}</span>
+              <span class="install-guide-step-copy">
+                <strong>${escapeHtml(step.title)}</strong>
+                <small>${escapeHtml(step.body)}</small>
               </span>
-              <span class="install-guide-pill-link">查看教程</span>
-            </button>
+            </li>
           `).join("")}
-        </div>
+        </ol>
       </article>
     </div>
   `
@@ -2749,7 +2678,6 @@ function renderInstallPage(snapshot, live) {
           ${renderInstallFooter()}
         </section>
       </section>
-      ${renderInstallGuideModal()}
     </section>
   `
 }
@@ -3819,29 +3747,6 @@ function bindInteractions() {
       if (command === "go-clear-pairing") {
         pageState.currentPage = "settings"
         pageState.settingsTab = "danger"
-        renderApp()
-        return
-      }
-      if (command === "wizard-open-guide") {
-        pageState.wizard.guide.selectedBrand = value
-        pageState.wizard.guide.stepIndex = 0
-        pageState.wizard.guide.modalOpen = true
-        renderApp()
-        return
-      }
-      if (command === "wizard-close-guide") {
-        pageState.wizard.guide.modalOpen = false
-        renderApp()
-        return
-      }
-      if (command === "wizard-guide-prev") {
-        pageState.wizard.guide.stepIndex = Math.max(0, pageState.wizard.guide.stepIndex - 1)
-        renderApp()
-        return
-      }
-      if (command === "wizard-guide-next") {
-        const lastIndex = wizardSelectedGuide().steps.length - 1
-        pageState.wizard.guide.stepIndex = Math.min(lastIndex, pageState.wizard.guide.stepIndex + 1)
         renderApp()
         return
       }

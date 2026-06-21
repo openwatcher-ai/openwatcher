@@ -69,12 +69,7 @@ Windows 可使用更明确的提示：
 - Product Release 提供 `release-manifest.json`、`checksums.txt`、`release-notes.md`、`changelog-entry.json` 和 `THIRD_PARTY_NOTICES.md`。
 - `openwatcher.ai` 是公开文档、更新检查和客户端下载入口，GitHub Release 是事实记录、历史归档和人工下载入口。
 
-当前公开技术预览：
-
-- Product Release：`beta-2026.06.16.1`
-- Runtime Release：`runtime-v0.1.0`
-- Desktop：`0.1.0`
-- Watch：`0.1.0`
+当前发布事实以 GitHub Releases、`https://openwatcher.ai/channels/beta.json` 和 `https://openwatcher.ai/changelog.json` 为准。正式发布初始化后，公开仓不保留旧 beta 或旧 changelog 记录作为当前版本说明。
 
 ## 快速开始
 

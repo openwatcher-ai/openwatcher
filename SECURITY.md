@@ -4,14 +4,7 @@ OpenWatcher 是本机优先的技术预览项目，会接触本机 Codex 状态�
 
 ## 支持范围
 
-当前只支持最新公开 beta 与其引用的 Runtime Release：
-
-- Product Release: `beta-2026.06.16.1`
-- Runtime Release: `runtime-v0.1.0`
-- Desktop: `0.1.0`
-- Watch: `0.1.0`
-
-旧 beta 和旧 runtime 只作为历史记录保留，不承诺安全补丁。
+当前只支持 `openwatcher.ai` official channel 指向的最新公开版本及其引用的 Runtime Release。旧 beta、旧 runtime 和清理前的历史记录不作为受支持版本。
 
 ## 报告漏洞
 

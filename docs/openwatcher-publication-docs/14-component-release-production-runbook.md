@@ -1,173 +1,128 @@
-# OpenWatcher Component Release 生产执行手册
+# OpenWatcher 正式发布执行手册
 
-本文档用于把组件级发布模型真正切到线上。它只记录已经验证过的事实、当前线上现状、需要执行的顺序和每一步完成后应看到的证据。
+本文档记录正式发布初始化后的执行顺序。清理前的旧 beta、旧 runtime、旧官网 changelog 和旧 workflow run 不作为当前发布事实保留。
 
-## 当前结论
+## 固定边界
 
-截至 2026-06-21，本地代码、脚本、Worker、Pages、Desktop、Watch 的目标范围改造已经完成，并完成了一次真实 Runtime / Product Release 发布与官网切换。
-
-当前线上证据：
-
-- `https://openwatcher.ai/channels/beta.json`
-  - 已返回新 schema
-  - 当前 `release.tag = "beta-2026.06.16.1"`
-  - 当前 `release.commit = "130013e3eb29bff4eb20b6b293278ebd6f04ce47"`
-  - 当前 `runtime.releaseTag = "runtime-v0.1.0"`
-  - 当前 Desktop / Watch 版本均为 `0.1.0`
-  - 不再包含 `product.version`
-- `https://openwatcher.ai/changelog.json`
-  - 已返回 JSON changelog
-  - 当前 `entries[0].id = "beta-2026.06.16.1"`
-- `https://openwatcher.ai/download/desktop/macos-arm64`
-  - 2026-06-21 复验为 302 到 current Desktop zip，最终 200
-- `https://openwatcher.ai/download/desktop/windows-amd64`
-  - 2026-06-21 复验为 302 到 current Desktop zip，最终 200
-
-当前待修复发布面：
-
-- `https://openwatcher.ai/file/beta/apk` 在 2026-06-21 复验时返回 `410 Gone`，需要在 official 发布面恢复或移除该入口。
-- 聚合 changelog 的历史 entry 可能仍包含 `links.channelManifestUrl`，需要迁移为 `links.releaseManifestUrl`。
-
-当前仓库与远端差异：
-
-- 公开仓 `<public-openwatcher-repo>`
-  - 已推送到 `origin/main`
-- 私有仓 `<private-platform-repo>`
-  - 已推送到维护者当前发布分支
-
-额外事实：
-
-- 公开仓 `main` 当前未启用 GitHub branch protection
-- `gh auth status` 可用
-- `wrangler whoami` 可用
-- Cloudflare Pages 项目名：`openwatcher-ai`
-- control-plane Worker 已部署
-- Pages 项目 `openwatcher-ai` 已部署
-
-## 已验证的本地脚本入口
-
-公开仓：
-
-- `scripts/trigger-publish-runtime-workflow.sh`
-- `scripts/trigger-publish-beta-workflow.sh`
-- `scripts/test-release-product-scripts.sh`
-
-私有仓：
-
-- `scripts/deploy-openwatcher-control-plane.sh`
-- `scripts/deploy-openwatcher-pages.sh`
-- `scripts/verify-openwatcher-release-surface.sh`
+- 公开仓 `openwatcher-ai/openwatcher` 只生成 GitHub Release fact package。
+- `ow-official` 只消费公开 release fact package，并发布 `openwatcher.ai` 的 channel、changelog 和 current 下载对象。
+- 正式产物必须来自 GitHub Actions，不使用本地临时构建作为公开产物。
+- 首个正式 Product Release 使用 `release_scope=full`。
+- 所有组件初始版本号为 `0.1.0`；Watch `versionCode` 为 `10000`。
 
 ## 生产执行顺序
 
-### 1. 推送公开仓 `main`
-
-在 `<public-openwatcher-repo>`：
+### 1. 准备公开仓 main
 
 ```bash
-git push origin main
+scripts/test-openwatcher-preflight.sh
+scripts/test-release-product-scripts.sh
 ```
 
-完成证据：
+完成条件：
 
-- `gh run` 读取到的 workflow 源文件已经对应当前本地提交
-- `gh workflow view 'OpenWatcher Publish Beta' --yaml` 和 `publish-runtime` 对应的是新版本
+- 目标提交已经通过 PR 合入 `main`。
+- `main` 分支保护要求 PR、发布门禁和管理员手动批准。
 
-### 2. 触发 Runtime Release
+### 2. 清理公开仓历史发布面
 
-需要发布新的 Runtime Release 时：
+清理对象：
+
+- 旧 GitHub Release。
+- 旧 release tag。
+- 旧 GitHub Actions run。
+
+完成条件：
+
+- `gh release list --repo openwatcher-ai/openwatcher` 不再列出旧 release。
+- 旧 release tag 不再存在。
+- 旧 workflow run 不再出现在 repo 可见运行列表中。
+
+### 3. 清理 official beta 发布面
+
+先 dry-run：
 
 ```bash
-cd <public-openwatcher-repo>
-scripts/trigger-publish-runtime-workflow.sh vX.Y.Z <platform-tools-version> <cloudflared-version>
+gh workflow run reset-openwatcher-official-beta.yml \
+  -R loccen/ow-official \
+  -f dry_run=true
 ```
 
-完成后核对：
+确认后真实执行：
 
 ```bash
-gh run list --workflow 'OpenWatcher Publish Runtime' --limit 5
-gh release view runtime-vX.Y.Z
+gh workflow run reset-openwatcher-official-beta.yml \
+  -R loccen/ow-official \
+  -f dry_run=false \
+  -f confirmation=RESET_OPENWATCHER_OFFICIAL_BETA \
+  -f reason="formal release initialization"
 ```
 
-必须看到：
+完成条件：
 
-- 新的 `runtime-v*` Release
-- `runtime-manifest.json`
-- `runtime-checksums.txt`
+- `https://openwatcher.ai/channels/beta.json` 返回明确 404 JSON。
+- `https://openwatcher.ai/changelog.json` 返回明确 404 JSON。
 
-### 3. 触发 Product Release
-
-再发组件级 beta：
+### 4. 触发 Runtime Release
 
 ```bash
-cd <public-openwatcher-repo>
-scripts/trigger-publish-beta-workflow.sh full '组件级发布模型首个线上切换版'
+gh workflow run "OpenWatcher Publish Runtime" \
+  -R openwatcher-ai/openwatcher \
+  --ref main \
+  -f runtime_version=v0.1.0 \
+  -f desktop_min_version=0.1.0 \
+  -f watch_version_name=0.1.0 \
+  -f watch_version_code=10000 \
+  -f platform_tools_version=<verified-platform-tools-version> \
+  -f cloudflared_version=<verified-cloudflared-version>
 ```
 
-如果只是验证组件复用，再分别补跑：
+完成条件：
+
+- `runtime-v0.1.0` Release 存在。
+- `runtime-manifest.json` 与 `runtime-checksums.txt` 存在并通过校验。
+
+### 5. 触发 Product Release
 
 ```bash
-scripts/trigger-publish-beta-workflow.sh desktop '仅更新 Desktop，验证 Watch 事实复用'
-scripts/trigger-publish-beta-workflow.sh watch '仅更新 Watch，验证 Desktop 事实复用'
-scripts/trigger-publish-beta-workflow.sh runtime-pointer '仅更新 Runtime 指针'
+gh workflow run "OpenWatcher Publish Beta" \
+  -R openwatcher-ai/openwatcher \
+  --ref main \
+  -f release_scope=full \
+  -f release_summary="OpenWatcher 初始正式发布，包含 Desktop、Watch、运行时依赖和本机服务组件。" \
+  -f desktop_version=0.1.0 \
+  -f watch_version_name=0.1.0 \
+  -f watch_version_code=10000
 ```
 
-完成后核对：
+完成条件：
+
+- 新 `beta-YYYY.MM.DD.N` Product Release 存在。
+- Release assets 包含 `release-manifest.json`、`checksums.txt`、`release-notes.md`、`changelog-entry.json` 和 `THIRD_PARTY_NOTICES.md`。
+- Release manifest、checksums、notes 与真实产物一致。
+
+### 6. 发布 official beta
 
 ```bash
-gh run list --workflow 'OpenWatcher Publish Beta' --limit 5
-gh release list --repo openwatcher-ai/openwatcher --limit 10
+gh workflow run publish-openwatcher-official-beta.yml \
+  -R loccen/ow-official \
+  -f release_tag=<new-beta-tag> \
+  -f cleanup_current=true
 ```
 
-必须看到：
+完成条件：
 
-- 新 tag 为 `beta-YYYY.MM.DD.N`
-- Release asset 包含：
-  - `release-manifest.json`
-  - `changelog-entry.json`
-  - `release-notes.md`
-  - `checksums.txt`
+- `channels/beta.json` 指向新的 Product Release。
+- `changelog.json` 只有初始发布一条记录。
+- Desktop、Watch 和 Runtime 下载 URL 全部指向 `https://openwatcher.ai`。
 
-### 4. 部署 control-plane Worker
-
-在 `<private-platform-repo>`：
+### 7. 验证官网与下载
 
 ```bash
-scripts/deploy-openwatcher-control-plane.sh deploy
-```
+gh workflow run verify-openwatcher-official-surface.yml \
+  -R loccen/ow-official \
+  -f branch=main
 
-完成证据：
-
-- `wrangler deployments list --config workers/openwatcher-control-plane/wrangler.jsonc`
- 里出现新 deployment
-
-### 5. 部署 Pages
-
-在 `<private-platform-repo>`：
-
-```bash
-scripts/deploy-openwatcher-pages.sh
-```
-
-完成证据：
-
-- `wrangler pages project list` 中 `openwatcher-ai` 最近修改时间更新
-- 官网内容与本地 `site/openwatcher-pages` 一致
-
-## 线上验收命令
-
-### 自动化入口
-
-```bash
-cd <private-platform-repo>
-scripts/verify-openwatcher-release-surface.sh
-```
-
-这一步必须通过。若失败，优先以脚本输出作为阻塞证据。
-
-### 手工核对
-
-```bash
 curl -fsSL https://openwatcher.ai/channels/beta.json | jq .
 curl -fsSL https://openwatcher.ai/changelog.json | jq .
 curl -I -L https://openwatcher.ai/download/desktop/macos-arm64
@@ -177,76 +132,20 @@ curl -I -L https://openwatcher.ai/file/beta/apk
 
 必须满足：
 
-- `channels/beta.json` 有 `revision`
-- `channels/beta.json.release.tag` 以 `beta-` 开头
-- `channels/beta.json` 不再包含 `product.version`
-- `channels/beta.json` 的客户端 `downloadUrl` / `manifestUrl` 都以 `https://openwatcher.ai/` 开头
-- `changelog.json` 返回 JSON，不再是 HTML
-- Desktop 下载路由从 official channel 派生
-- APK 下载入口返回 200 或 302 后最终 200，不能返回 410
+- `changelog.json.entries | length == 1`。
+- `changelog.json.entries[0].id` 等于当前 Product Release tag。
+- Desktop 下载路由最终返回 200。
+- Watch APK 下载入口最终返回 200。
+- Runtime manifest 内部资源 URL 均为 `https://openwatcher.ai/downloads/beta/current/runtime/...`。
 
-## 客户端验收
+## 结果记录
 
-### Watch
+正式发布完成后，记录：
 
-- 真实检查更新时，主入口读取 `/channels/beta.json`
-- 不再请求 GitHub Releases API 或 GitHub Release asset 作为更新检查来源
-- changelog 只显示手表相关条目
-
-### Desktop
-
-- official channel 的 `runtime.manifestUrl` 与 `runtime.manifestSha256` 仍能驱动首次下载
-- runtime 包解析 changelog 时，只取：
-  - 【桌面应用】
-  - 【运行时依赖】
-  - 【兼容性】
-  - 必要时【文档】
-
-## 常见阻塞
-
-### `channels/beta.json` 仍是旧 schema
-
-说明：
-
-- `publish-beta` 还没跑到线上
-- 或 Worker / Pages 还没部署
-
-### `changelog.json` 返回 HTML
-
-说明：
-
-- Pages `_worker.js` 还没部署
-- 或 control-plane Worker 没有新接口
-
-### 公开仓 workflow 没有新输入
-
-说明：
-
-- 本地提交还没 push 到 `origin/main`
-
-### Worker dry-run 通过，但线上未变
-
-说明：
-
-- 只做了 dry-run，没有 `deploy`
-
-## 本轮实际结果
-
-- [x] push 公开仓 `main`
-- [x] 真实触发 `publish-runtime`
-- [x] 真实触发 `publish-beta`
-- [x] 部署 control-plane Worker
-- [x] 部署 Pages
-- [x] `scripts/verify-openwatcher-release-surface.sh` 通过
-
-当前线上发布结果：
-
-- Runtime Release：`runtime-v0.1.0`
-- Product Release：`beta-2026.06.16.1`
-- Release commit：`130013e3eb29bff4eb20b6b293278ebd6f04ce47`
-- Worker 公开入口：
-  - `https://api.worker.openwatcher.ai/channels/beta.json`
-  - `https://api.worker.openwatcher.ai/changelog.json`
-- 官网公开入口：
-  - `https://openwatcher.ai/channels/beta.json`
-  - `https://openwatcher.ai/changelog.json`
+- Runtime Release tag。
+- Product Release tag。
+- 发布 commit。
+- GitHub Actions run id。
+- official publish run id。
+- 官网验证 run id。
+- Desktop、Watch 和 Runtime 关键下载对象的 sha256 与 sizeBytes。

@@ -1131,6 +1131,7 @@ button:disabled {
 
 .section-block,
 .result-list,
+.guide-step-list,
 .guide-list,
 .config-entry-grid,
 .toggle-list,
@@ -1226,6 +1227,7 @@ button:disabled {
 }
 
 .check-item {
+  min-width: 0;
   min-height: 72px;
   padding: 10px;
   display: grid;
@@ -1247,6 +1249,53 @@ button:disabled {
   background: rgba(16, 50, 31, 0.28);
 }
 
+.download-progress {
+  min-width: 0;
+  margin-top: 2px;
+  display: grid;
+  gap: 5px;
+}
+
+.download-progress-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.download-progress-head span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-progress-head strong {
+  flex: 0 0 auto;
+  color: #dbeafe;
+  font-size: 12px;
+}
+
+.download-progress-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.download-progress-track span {
+  display: block;
+  height: 100%;
+  min-width: 5px;
+  border-radius: inherit;
+  background: #3b82f6;
+  transition: width 180ms ease;
+}
+
 .check-top {
   display: flex;
   align-items: flex-start;
@@ -1262,6 +1311,7 @@ button:disabled {
 }
 
 .check-top strong {
+  min-width: 0;
   flex: 1 1 auto;
   font-size: 13px;
   line-height: 1.35;
@@ -1314,6 +1364,53 @@ button:disabled {
   color: var(--muted);
   font-style: normal;
   font-size: 12px;
+}
+
+.guide-step-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guide-step-item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.guide-step-index {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(48, 132, 255, 0.16);
+  color: #8ec9ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.guide-step-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.guide-step-copy strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.guide-step-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .inline-alert {
@@ -2048,10 +2145,19 @@ button:disabled {
 }
 
 :root[data-theme="light"] .guide-row,
+:root[data-theme="light"] .guide-step-item,
 :root[data-theme="light"] .result-item,
 :root[data-theme="light"] .check-item {
   border-color: var(--border-muted);
   background: var(--surface-soft);
+}
+
+:root[data-theme="light"] .download-progress-track {
+  background: #d8e2ef;
+}
+
+:root[data-theme="light"] .download-progress-head strong {
+  color: #174ea6;
 }
 
 :root[data-theme="light"] .guide-row.is-active,
@@ -2076,6 +2182,7 @@ button:disabled {
 
 :root[data-theme="light"] .text-action,
 :root[data-theme="light"] .check-all-action,
+:root[data-theme="light"] .guide-step-index,
 :root[data-theme="light"] .guide-bullet span {
   color: var(--text-link);
 }
@@ -2213,7 +2320,6 @@ button:disabled {
   }
 
   .developer-page-layout,
-  .stage-grid.prepare,
   .stage-grid.two,
   .split-layout,
   .settings-grid {
@@ -2232,6 +2338,10 @@ button:disabled {
 
   .content-area {
     padding: 10px;
+  }
+
+  .stage-grid.prepare {
+    grid-template-columns: 1fr;
   }
 
   .nav-item span,
