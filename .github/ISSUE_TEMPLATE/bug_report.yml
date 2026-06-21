@@ -1,0 +1,77 @@
+name: Bug report
+description: 报告 OpenWatcher Desktop、Watch、backend 或发布产物问题
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先确认内容不包含 token、cookie、配置码、tunnel 凭据、完整本机路径或完整隐私日志。安全漏洞请使用 Security report，不要提交公开 issue。
+  - type: dropdown
+    id: component
+    attributes:
+      label: 组件
+      options:
+        - Desktop
+        - Watch
+        - Backend
+        - Runtime
+        - Release artifact
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 例如 Desktop 0.1.0、Watch 0.1.0、beta-2026.06.16.1
+    validations:
+      required: true
+  - type: dropdown
+    id: network_mode
+    attributes:
+      label: 网络模式
+      options:
+        - Localhost
+        - LAN
+        - Custom public URL
+        - Hosted tunnel
+        - Not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 已脱敏诊断信息
+      description: 可以粘贴 Desktop 诊断摘要、错误片段或截图说明；不要粘贴完整日志和敏感字段。
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已移除 token、cookie、配置码、tunnel 凭据、完整本机路径和完整隐私日志。
+          required: true

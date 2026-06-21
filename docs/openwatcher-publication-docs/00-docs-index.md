@@ -15,6 +15,11 @@
 2. `10-technical-preview-release-checklist.md`
    technical preview 发布前 checklist，明确哪些文档与代码路径已经核对完成，哪些 Windows 和手表主路径已完成真实验收，以及哪些 macOS、公网模式和兼容性样本仍待补充。
 
+3. 根目录治理文档
+   - `SECURITY.md`：漏洞报告、敏感信息脱敏、本机与公网安全边界。
+   - `PRIVACY.md`：本机保存内容、默认不上传内容和诊断反馈边界。
+   - `CONTRIBUTING.md`：贡献流程、验证命令和公开仓范围。
+
 ## 维护者参考文档
 
 1. `01-next-phase-roadmap.md`  
@@ -39,7 +44,7 @@
    GitHub Release 交付物、打包要求、checksums、第三方 notices 和最终发布验收项。
 
 8. `14-component-release-production-runbook.md`
-   组件级发布模型的生产执行手册，记录当前线上仍是旧 schema 的证据、真实发布顺序、脚本入口和验收命令。
+   组件级发布模型的生产执行手册，记录当前线上 release 事实、真实发布顺序、脚本入口和验收命令。
 
 ## 当前公开状态说明
 
@@ -48,6 +53,9 @@
 - 对外主入口：OpenWatcher Desktop。
 - 当前公开技术预览不把 Google Play 或厂商手表商店作为首要安装渠道。
 - 仓库内保留 Desktop 侧托管隧道兑换与本地 `cloudflared` 运行逻辑；控制面部署细节不包含在公开仓。
+- 当前 Product Release：`beta-2026.06.16.1`。
+- 当前 Runtime Release：`runtime-v0.1.0`。
+- 当前公开 release commit：`130013e3eb29bff4eb20b6b293278ebd6f04ce47`。
 - Windows x64 release 安装器主路径已完成真实验收。
 - 手表真机安装、启动和运行时配置写入已完成真实验收；公网模式与更多机型兼容性仍需继续补充样本。
 

@@ -144,9 +144,11 @@ run_generate_checksums "$watch_only_dir"
 run_check "$watch_only_dir"
 
 missing_field_dir="$TMP_DIR/missing-field"
+missing_notes_dir="$TMP_DIR/missing-notes"
 wrong_sha_dir="$TMP_DIR/wrong-sha"
 bad_url_dir="$TMP_DIR/bad-url"
 cp -R "$desktop_only_dir" "$missing_field_dir"
+cp -R "$desktop_only_dir" "$missing_notes_dir"
 cp -R "$desktop_only_dir" "$wrong_sha_dir"
 cp -R "$desktop_only_dir" "$bad_url_dir"
 
@@ -155,6 +157,10 @@ jq 'del(.release.scope)' "$missing_field_dir/release-manifest.json" >"$tmp_json"
 mv "$tmp_json" "$missing_field_dir/release-manifest.json"
 run_generate_checksums "$missing_field_dir"
 expect_fail "manifest 缺字段" run_check "$missing_field_dir"
+
+rm -f "$missing_notes_dir/release-notes.md"
+run_generate_checksums "$missing_notes_dir"
+expect_fail "缺少 release-notes.md" run_check "$missing_notes_dir"
 
 jq '.desktop.platforms["darwin-arm64"].sha256 = "deadbeef"' "$wrong_sha_dir/release-manifest.json" >"$tmp_json"
 mv "$tmp_json" "$wrong_sha_dir/release-manifest.json"

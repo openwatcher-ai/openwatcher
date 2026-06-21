@@ -24,8 +24,17 @@
 - [x] Product Release tag 已改成 `beta-YYYY.MM.DD.N`
 - [x] `generate-release-manifest.sh` 支持组件复用
 - [x] `generate-changelog-entry.sh`、`generate-release-notes.sh` 已新增；`generate-channel-manifest.sh` 已退出公开仓职责
-- [x] `check-release-artifacts.sh` 已按新 schema 校验
+- [x] `check-release-artifacts.sh` 已按新 schema 校验，并强制要求 `release-manifest.json`、`checksums.txt`、`release-notes.md`、`changelog-entry.json`、`THIRD_PARTY_NOTICES.md`
 - [x] `scripts/test-release-product-scripts.sh` 已覆盖 full 和 desktop 复用场景
+
+### 公开治理与安全文档
+
+- [x] `SECURITY.md` 已补充支持版本、漏洞报告路径、敏感信息脱敏要求和公网安全边界
+- [x] `PRIVACY.md` 已补充本机保存内容、默认不上传内容和诊断反馈边界
+- [x] `CONTRIBUTING.md` 已补充公开仓贡献范围与验证命令
+- [x] `.github/ISSUE_TEMPLATE/bug_report.yml` 已补充脱敏确认
+- [x] `.github/ISSUE_TEMPLATE/compatibility_report.yml` 已补充兼容性样本字段
+- [x] `.github/ISSUE_TEMPLATE/config.yml` 已提供私密安全报告入口
 
 ### 私有 Worker / Pages / 客户端
 
@@ -62,10 +71,11 @@
 - [x] Release assets 包含 `release-notes.md`
 - [x] Release notes 与 `changelog-entry.json` 语义一致
 
-当前产物：
+当前公开产物：
 
-- Runtime Release：`runtime-v0.1.1`
-- Product Release：`beta-2026.06.12.1`
+- Runtime Release：`runtime-v0.1.0`
+- Product Release：`beta-2026.06.16.1`
+- Release commit：`130013e3eb29bff4eb20b6b293278ebd6f04ce47`
 
 ### 私有 Worker / Pages
 
@@ -82,6 +92,13 @@
 - [x] official channel 中客户端 URL 指向 `https://openwatcher.ai`
 - [x] 桌面下载路由从 official channel 派生
 - [x] 官网首页已包含 changelog 区块，并从 `/changelog.json` 拉取数据
+
+## 当前外部阻塞
+
+以下项目不属于公开仓代码直接修复范围，需要在官网 / official 发布面处理后复验：
+
+- [ ] `https://openwatcher.ai/file/beta/apk` 在 2026-06-21 复验时仍返回 `410 Gone`，需要恢复为可下载 APK 或明确移除该公开入口。
+- [ ] official 聚合 changelog 中历史 entry 仍可能包含旧字段 `links.channelManifestUrl`；公开仓当前生成脚本已经输出 `links.releaseManifestUrl`，需要 official 同步侧重放或迁移历史记录。
 
 ## 后续可追加的真机体验验证
 

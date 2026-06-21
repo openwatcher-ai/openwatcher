@@ -4,25 +4,36 @@
 
 ## 当前结论
 
-截至 2026-06-12，本地代码、脚本、Worker、Pages、Desktop、Watch 的目标范围改造已经完成，并完成了一次真实 Runtime / Product Release 发布与官网切换。
+截至 2026-06-21，本地代码、脚本、Worker、Pages、Desktop、Watch 的目标范围改造已经完成，并完成了一次真实 Runtime / Product Release 发布与官网切换。
 
 当前线上证据：
 
 - `https://openwatcher.ai/channels/beta.json`
   - 已返回新 schema
-  - 当前 `revision = 1`
-  - 当前 `release.tag = "beta-2026.06.12.1"`
+  - 当前 `release.tag = "beta-2026.06.16.1"`
+  - 当前 `release.commit = "130013e3eb29bff4eb20b6b293278ebd6f04ce47"`
+  - 当前 `runtime.releaseTag = "runtime-v0.1.0"`
+  - 当前 Desktop / Watch 版本均为 `0.1.0`
   - 不再包含 `product.version`
 - `https://openwatcher.ai/changelog.json`
   - 已返回 JSON changelog
-  - 当前 `entries[0].id = "beta-2026.06.12.1"`
+  - 当前 `entries[0].id = "beta-2026.06.16.1"`
+- `https://openwatcher.ai/download/desktop/macos-arm64`
+  - 2026-06-21 复验为 302 到 current Desktop zip，最终 200
+- `https://openwatcher.ai/download/desktop/windows-amd64`
+  - 2026-06-21 复验为 302 到 current Desktop zip，最终 200
+
+当前待修复发布面：
+
+- `https://openwatcher.ai/file/beta/apk` 在 2026-06-21 复验时返回 `410 Gone`，需要在 official 发布面恢复或移除该入口。
+- 聚合 changelog 的历史 entry 可能仍包含 `links.channelManifestUrl`，需要迁移为 `links.releaseManifestUrl`。
 
 当前仓库与远端差异：
 
 - 公开仓 `<public-openwatcher-repo>`
   - 已推送到 `origin/main`
 - 私有仓 `<private-platform-repo>`
-  - 已推送到 `origin/openwatcher-pub-pre`
+  - 已推送到维护者当前发布分支
 
 额外事实：
 
@@ -64,18 +75,18 @@ git push origin main
 
 ### 2. 触发 Runtime Release
 
-建议先发新的 Runtime Release：
+需要发布新的 Runtime Release 时：
 
 ```bash
 cd <public-openwatcher-repo>
-scripts/trigger-publish-runtime-workflow.sh v0.1.1 36.0.0 2026.6.0
+scripts/trigger-publish-runtime-workflow.sh vX.Y.Z <platform-tools-version> <cloudflared-version>
 ```
 
 完成后核对：
 
 ```bash
 gh run list --workflow 'OpenWatcher Publish Runtime' --limit 5
-gh release view runtime-v0.1.1
+gh release view runtime-vX.Y.Z
 ```
 
 必须看到：
@@ -160,6 +171,8 @@ scripts/verify-openwatcher-release-surface.sh
 curl -fsSL https://openwatcher.ai/channels/beta.json | jq .
 curl -fsSL https://openwatcher.ai/changelog.json | jq .
 curl -I -L https://openwatcher.ai/download/desktop/macos-arm64
+curl -I -L https://openwatcher.ai/download/desktop/windows-amd64
+curl -I -L https://openwatcher.ai/file/beta/apk
 ```
 
 必须满足：
@@ -170,6 +183,7 @@ curl -I -L https://openwatcher.ai/download/desktop/macos-arm64
 - `channels/beta.json` 的客户端 `downloadUrl` / `manifestUrl` 都以 `https://openwatcher.ai/` 开头
 - `changelog.json` 返回 JSON，不再是 HTML
 - Desktop 下载路由从 official channel 派生
+- APK 下载入口返回 200 或 302 后最终 200，不能返回 410
 
 ## 客户端验收
 
@@ -227,8 +241,9 @@ curl -I -L https://openwatcher.ai/download/desktop/macos-arm64
 
 当前线上发布结果：
 
-- Runtime Release：`runtime-v0.1.1`
-- Product Release：`beta-2026.06.12.1`
+- Runtime Release：`runtime-v0.1.0`
+- Product Release：`beta-2026.06.16.1`
+- Release commit：`130013e3eb29bff4eb20b6b293278ebd6f04ce47`
 - Worker 公开入口：
   - `https://api.worker.openwatcher.ai/channels/beta.json`
   - `https://api.worker.openwatcher.ai/changelog.json`

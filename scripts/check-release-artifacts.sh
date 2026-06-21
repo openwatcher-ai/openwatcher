@@ -14,12 +14,14 @@ require_command rg
 CHECKSUMS_PATH="$SCAN_DIR/checksums.txt"
 MANIFEST_PATH="$SCAN_DIR/release-manifest.json"
 CHANGELOG_ENTRY_PATH="$SCAN_DIR/changelog-entry.json"
+RELEASE_NOTES_PATH="$SCAN_DIR/release-notes.md"
 NOTICES_PATH="$SCAN_DIR/THIRD_PARTY_NOTICES.md"
 RUNTIME_MANIFEST_PATH="${OPENWATCHER_RUNTIME_MANIFEST_PATH:-}"
 
 [[ -f "$CHECKSUMS_PATH" ]] || die "缺少 checksums.txt：$CHECKSUMS_PATH"
 [[ -f "$MANIFEST_PATH" ]] || die "缺少 release-manifest.json：$MANIFEST_PATH"
 [[ -f "$CHANGELOG_ENTRY_PATH" ]] || die "缺少 changelog-entry.json：$CHANGELOG_ENTRY_PATH"
+[[ -f "$RELEASE_NOTES_PATH" ]] || die "缺少 release-notes.md：$RELEASE_NOTES_PATH"
 [[ -f "$NOTICES_PATH" ]] || die "缺少 THIRD_PARTY_NOTICES.md：$NOTICES_PATH"
 
 checksum_lookup() {

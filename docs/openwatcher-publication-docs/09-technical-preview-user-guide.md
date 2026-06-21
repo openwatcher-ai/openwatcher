@@ -20,10 +20,12 @@
 - macOS Apple Silicon
 - macOS Intel
 - Windows x64
+- Windows arm64
 
 注意：
 
 - Windows x64 已完成 release 安装器主路径验收，包括安装、启动、本机服务自检、ADB 安装手表 APK 和运行时配置写入。
+- Windows arm64 已生成公开 release 产物，但仍需要更多真实设备验收样本。
 - GitHub Release 的 Desktop 包当前只附带主程序和 sidecar；首次启动或依赖缺失时，Desktop 会自动下载并缓存 ADB / platform-tools、`cloudflared` 和手表 APK 到本机 `runtime/` 目录。
 
 ### 启动前准备
@@ -196,6 +198,7 @@ OpenWatcher Desktop 的目标是做本机控制台，不是把你的 Codex 数�
 
 - 托管隧道不提供公开自助注册或自助发码。
 - Windows x64 已完成主路径验收，但仍建议在更多 Windows 版本和网络环境中补充样本。
+- Windows arm64 有 release 产物，仍缺少足够真实设备样本。
 - macOS technical preview 包当前按未公证 release 交付，首次启动需要右键打开。
 - 手表真机已完成安装、启动和配置写入主路径验收；公网模式和更多机型兼容性仍需继续补充样本。
 - 当前兼容性仍在扩大，不能保证所有 Wear OS 或 Android 手表都能稳定使用。
@@ -206,8 +209,9 @@ OpenWatcher Desktop 的目标是做本机控制台，不是把你的 Codex 数�
 ### 电脑平台
 
 - macOS Apple Silicon：当前主要开发路径。
-- macOS Intel：作为目标交付平台保留。
+- macOS Intel：已生成公开 release 产物，仍需要更多真实设备验收样本。
 - Windows x64：release 安装器主路径已完成真实验收。
+- Windows arm64：已生成公开 release 产物，仍需要更多真实设备验收样本。
 - Linux：当前不在本轮公开技术预览范围内。
 
 ### 手表平台

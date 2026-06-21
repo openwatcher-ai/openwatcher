@@ -66,8 +66,15 @@ Windows 可使用更明确的提示：
 - Desktop 和 Watch 的发布版本必须由构建输入传入，不写死在源码或配置文件里。
 - 本机服务随 Desktop 打包交付，只保留构建信息，不作为独立产品版本展示。
 - Runtime Release 提供运行时依赖的公开事实记录。
-- Product Release 提供 `release-manifest.json`、`checksums.txt`、`release-notes.md` 和 `changelog-entry.json`。
+- Product Release 提供 `release-manifest.json`、`checksums.txt`、`release-notes.md`、`changelog-entry.json` 和 `THIRD_PARTY_NOTICES.md`。
 - `openwatcher.ai` 是公开文档、更新检查和客户端下载入口，GitHub Release 是事实记录、历史归档和人工下载入口。
+
+当前公开技术预览：
+
+- Product Release：`beta-2026.06.16.1`
+- Runtime Release：`runtime-v0.1.0`
+- Desktop：`0.1.0`
+- Watch：`0.1.0`
 
 ## 快速开始
 
@@ -97,6 +104,12 @@ scripts/test-openwatcher-preflight.sh
 - [发布前 Checklist](docs/openwatcher-publication-docs/10-technical-preview-release-checklist.md)
 - [发布文档索引](docs/openwatcher-publication-docs/00-docs-index.md)
 - [Desktop 目录说明](desktop-app/README.md)
+
+## 参与和安全
+
+- [贡献说明](CONTRIBUTING.md)
+- [安全策略](SECURITY.md)
+- [隐私说明](PRIVACY.md)
 
 ## 许可
 

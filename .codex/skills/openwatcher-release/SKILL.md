@@ -39,10 +39,7 @@ description: Use whenever Codex needs to diagnose, implement, plan, execute, or 
 
 - `references/release-lessons.md`
 
-如果当前任务是在实现或修改发布机制，再同时参考仓库内已确认设计：
-
-- `docs/superpowers/specs/2026-06-11-openwatcher-component-release-model-and-changelog.md`
-- `docs/superpowers/specs/2026-06-09-openwatcher-release-skill-design.md`
+如果当前任务是在实现或修改发布机制，以本 Skill 的 `references/`、公开发布文档和当前 workflow 为准。公开仓不包含历史内部设计目录 `docs/superpowers/`；不要把不可达内部路径当作执行依据。
 
 ## 硬规则
 

@@ -1,0 +1,83 @@
+name: Compatibility report
+description: 补充电脑、手表、网络和 ADB 兼容性样本
+title: "[Compatibility]: "
+labels:
+  - compatibility
+body:
+  - type: markdown
+    attributes:
+      value: |
+        兼容性样本会影响公开文档支持范围。请只写已验证事实，不要粘贴 token、配置码、完整日志或本机完整路径。
+  - type: input
+    id: desktop_os
+    attributes:
+      label: 电脑系统与架构
+      placeholder: macOS 15 arm64 / Windows 11 x64
+    validations:
+      required: true
+  - type: input
+    id: desktop_version
+    attributes:
+      label: OpenWatcher Desktop 版本
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: watch_model
+    attributes:
+      label: 手表型号与系统
+      placeholder: Pixel Watch / Galaxy Watch / Xiaomi / OPPO / vivo / TicWatch
+    validations:
+      required: true
+  - type: input
+    id: watch_version
+    attributes:
+      label: OpenWatcher Watch 版本
+      placeholder: "0.1.0"
+  - type: dropdown
+    id: network_mode
+    attributes:
+      label: 验证的网络模式
+      options:
+        - LAN
+        - Custom public URL
+        - Hosted tunnel
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: 结果
+      options:
+        - Passed
+        - Passed with workaround
+        - Failed
+        - Inconclusive
+    validations:
+      required: true
+  - type: textarea
+    id: checked_steps
+    attributes:
+      label: 已验证步骤
+      placeholder: |
+        - Desktop 启动
+        - /healthz 自检
+        - adb pair
+        - adb connect
+        - APK install
+        - bootstrap 写入
+        - Watch 请求后端
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 备注或 workaround
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我只提交了已脱敏信息，并确认没有公开 token、配置码、tunnel 凭据或完整隐私日志。
+          required: true
