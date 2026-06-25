@@ -519,6 +519,90 @@ func TestSnapshotAtHeatmapAvoidsInflatedInterleavedCumulativeSeries(t *testing.T
 	}
 }
 
+func TestSnapshotAtRebuildsInflatedDailyMetricsCache(t *testing.T) {
+	home := t.TempDir()
+	codexHome := filepath.Join(home, ".codex")
+	if err := os.MkdirAll(codexHome, 0o755); err != nil {
+		t.Fatalf("mkdir codex home: %v", err)
+	}
+	t.Setenv("HOME", home)
+
+	location, err := time.LoadLocation(heatmapTimezoneName)
+	if err != nil {
+		t.Fatalf("load location: %v", err)
+	}
+	now := time.Date(2026, 6, 4, 10, 0, 0, 0, location)
+	threadID := "019e8943-36f6-73b2-8a7a-c30c3ecc0ef2-rebuild-cache"
+	rolloutPath := writeRollout(t, codexHome, threadID, []string{
+		`{"timestamp":"2026-06-04T01:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":60,"cached_input_tokens":20,"output_tokens":15,"reasoning_output_tokens":5,"total_tokens":100},"last_token_usage":{"input_tokens":60,"cached_input_tokens":20,"output_tokens":15,"reasoning_output_tokens":5,"total_tokens":100},"model_context_window":920000}}}`,
+		`{"timestamp":"2026-06-04T01:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":120,"cached_input_tokens":40,"output_tokens":30,"reasoning_output_tokens":10,"total_tokens":200},"last_token_usage":{"input_tokens":60,"cached_input_tokens":20,"output_tokens":15,"reasoning_output_tokens":5,"total_tokens":100},"model_context_window":920000}}}`,
+		`{"timestamp":"2026-06-04T01:10:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":180,"cached_input_tokens":60,"output_tokens":45,"reasoning_output_tokens":15,"total_tokens":300},"last_token_usage":{"input_tokens":60,"cached_input_tokens":20,"output_tokens":15,"reasoning_output_tokens":5,"total_tokens":100},"model_context_window":920000}}}`,
+	})
+	writeStateDB(t, filepath.Join(codexHome, "state_5.sqlite"), stateThreadRow{
+		ThreadID:        threadID,
+		Title:           "重复缓存重建",
+		Model:           "gpt-5.4",
+		ReasoningEffort: "high",
+		TokensUsedTotal: 300,
+		UpdatedAt:       now.Add(-5 * time.Minute),
+		RolloutPath:     rolloutPath,
+	})
+
+	metricsPath, err := resolveMetricsCachePath()
+	if err != nil {
+		t.Fatalf("resolve metrics cache path: %v", err)
+	}
+	info, err := os.Stat(rolloutPath)
+	if err != nil {
+		t.Fatalf("stat rollout: %v", err)
+	}
+	hourStart := time.Date(2026, 6, 4, 9, 0, 0, 0, location)
+	cache := newMetricsCache(location)
+	cache.DayStart = dayWindowStart(now).Format(time.RFC3339)
+	cache.UpdatedAt = now.Add(-time.Minute).Format(time.RFC3339)
+	cache.RolloutCursors[rolloutPath] = rolloutCursor{Offset: info.Size(), LastTimestamp: "2026-06-04T01:10:00Z"}
+	cache.ThreadTotals[threadID] = tokenTotals{
+		InputTokens:           180,
+		CachedInputTokens:     60,
+		OutputTokens:          45,
+		ReasoningOutputTokens: 15,
+		TotalTokens:           300,
+	}
+	cache.HourBuckets = []cachedHeatmapBucket{{
+		HourStart:             hourStart.Format(time.RFC3339),
+		InputTokens:           1260,
+		CachedInputTokens:     420,
+		OutputTokens:          315,
+		ReasoningOutputTokens: 105,
+		TotalTokens:           2100,
+		ActiveThreads:         1,
+	}}
+	cache.ModelBuckets = []cachedDailyModelBucket{{
+		Model:                 "gpt-5.4",
+		InputTokens:           1260,
+		CachedInputTokens:     420,
+		OutputTokens:          315,
+		ReasoningOutputTokens: 105,
+		TotalTokens:           2100,
+	}}
+	cache.BucketThreadIDs[hourStart.Format(time.RFC3339)] = []string{threadID}
+	if err := saveMetricsCache(metricsPath, cache); err != nil {
+		t.Fatalf("save metrics cache: %v", err)
+	}
+
+	scanner := NewScanner(codexHome, 5)
+	snapshot, err := scanner.SnapshotAt(now)
+	if err != nil {
+		t.Fatalf("SnapshotAt() error = %v", err)
+	}
+	if total := heatmapTotal(snapshot.Heatmap24h.Buckets); total != 300 {
+		t.Fatalf("rebuilt heatmap total = %d, want 300", total)
+	}
+	if snapshot.DailyUsage.TotalTokens != 300 {
+		t.Fatalf("rebuilt daily usage total = %d, want 300", snapshot.DailyUsage.TotalTokens)
+	}
+}
+
 func TestSnapshotAtDailyTrendUsesShanghaiCompleteDays(t *testing.T) {
 	home := t.TempDir()
 	codexHome := filepath.Join(home, ".codex")

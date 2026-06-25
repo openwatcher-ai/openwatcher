@@ -155,6 +155,9 @@ func refreshMetricsCache(path string, cache *metricsCache, rollouts []rolloutEnt
 	backfillMissingThreadContexts(cache, activeRows)
 
 	trimMetricsCache(cache, rollouts, activeRows, windowStart)
+	if metricsCacheDailyBucketsExceedThreadTotals(*cache) {
+		rebuildDailyMetricsCache(cache, rollouts, activeRows, windowStart)
+	}
 	cache.UpdatedAt = now.Format(time.RFC3339)
 	_ = saveMetricsCache(path, *cache)
 }
@@ -471,6 +474,43 @@ func trimMetricsCache(cache *metricsCache, rollouts []rolloutEntry, activeRows [
 	sort.Slice(cache.ModelBuckets, func(i, j int) bool {
 		return cache.ModelBuckets[i].TotalTokens > cache.ModelBuckets[j].TotalTokens
 	})
+}
+
+func metricsCacheDailyBucketsExceedThreadTotals(cache metricsCache) bool {
+	var dailyTotal int64
+	for _, bucket := range cache.HourBuckets {
+		dailyTotal += bucket.TotalTokens
+	}
+	if dailyTotal <= 0 {
+		return false
+	}
+
+	activeThreadIDs := map[string]bool{}
+	for _, threadIDs := range cache.BucketThreadIDs {
+		for _, threadID := range threadIDs {
+			activeThreadIDs[threadID] = true
+		}
+	}
+	if len(activeThreadIDs) == 0 {
+		return false
+	}
+
+	var threadTotalUpperBound int64
+	for threadID := range activeThreadIDs {
+		threadTotalUpperBound += cache.ThreadTotals[threadID].TotalTokens
+	}
+	return threadTotalUpperBound > 0 && dailyTotal > threadTotalUpperBound
+}
+
+func rebuildDailyMetricsCache(cache *metricsCache, rollouts []rolloutEntry, activeRows []threadRow, windowStart time.Time) {
+	rebuilt := newMetricsCache(windowStart.Location())
+	resetDailyMetricsCacheIfNeeded(&rebuilt, windowStart)
+	for _, entry := range rollouts {
+		scanRollout(entry, &rebuilt, windowStart)
+	}
+	backfillMissingThreadContexts(&rebuilt, activeRows)
+	trimMetricsCache(&rebuilt, rollouts, activeRows, windowStart)
+	*cache = rebuilt
 }
 
 func buildHeatmapSnapshot(cache metricsCache, now time.Time) Heatmap24hSnapshot {
