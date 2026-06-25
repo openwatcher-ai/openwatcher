@@ -16,7 +16,7 @@ const (
 	heatmapBucketCount            = 24
 	heatmap7dDayCount             = 7
 	dailyTrendDayCount            = 30
-	metricsCacheVersion           = 4
+	metricsCacheVersion           = 5
 	heatmapTimezoneName           = "Asia/Shanghai"
 	threadNameResolverTimeout     = 2 * time.Second
 	activeSessionCandidateLimit   = 30
