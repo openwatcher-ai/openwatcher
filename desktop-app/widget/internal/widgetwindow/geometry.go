@@ -74,8 +74,9 @@ func AnchorCorner(anchor Geometry, a WorkArea) string {
 	return vertical + "-" + horizontal
 }
 
-// ExpandAt grows the panel around a collapsed orb. The CSS orb sits directly
-// in the selected panel corner, so its top-left remains stable.
+// ExpandAt grows the panel inward from the collapsed orb's saved corner. The
+// orb is hidden while expanded, and the corner maps the panel back to the
+// original collapsed position.
 func ExpandAt(anchor Geometry, a WorkArea, corner string) Geometry {
 	w, h := PanelSize(a)
 	g := Geometry{Width: w, Height: h, Expanded: true}

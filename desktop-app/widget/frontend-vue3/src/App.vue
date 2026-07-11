@@ -8,15 +8,14 @@
     @click="handleClick"
   >
     <FloatingOrb
+      v-if="!isExpanded"
       :quota="state.quota"
       :status="state.status"
-      :expanded="isExpanded"
-      :anchor-corner="state.anchorCorner"
       @toggle="doToggle"
       @drag-finished="snapCurrentWindow"
     />
     <OverviewPanel
-      v-if="isExpanded"
+      v-else
       :state="state"
       :status-label="statusLabel"
       :busy="busy"
@@ -25,7 +24,7 @@
       @close="collapsePanel"
       @open-main="openMainApp"
     >
-      <QuotaPanel :quota="state.quota" />
+      <QuotaPanel :quota="state.quota" :timezone="state.timezone" />
       <TodayPanel
         :today="state.today"
         :buckets="state.heatmap24h?.buckets"

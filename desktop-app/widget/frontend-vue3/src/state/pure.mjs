@@ -31,15 +31,49 @@ export function composition(today) {
   ]
 }
 
-export function calendarCells(days = []) {
-  const cells = Array.from({ length: 35 }, () => null)
-  const occurrence = Array(7).fill(0)
-  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date)).slice(-30)
+export function buildHeatScale(values = [], levelCount = 5) {
+  const sorted = values
+    .filter((value) => Number.isFinite(value) && value > 0)
+    .sort((a, b) => a - b)
+  if (!sorted.length) return { flat: false, thresholds: [] }
+  if (sorted[0] === sorted.at(-1)) return { flat: true, thresholds: [] }
 
+  const quantile = (fraction) => {
+    const position = (sorted.length - 1) * fraction
+    const lower = Math.floor(position)
+    const upper = Math.ceil(position)
+    if (lower === upper) return sorted[lower]
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower)
+  }
+  return {
+    flat: false,
+    thresholds: Array.from({ length: levelCount - 1 }, (_, index) => quantile((index + 1) / levelCount)),
+  }
+}
+
+export function heatScaleLevel(value, scale, levelCount = 5) {
+  if (!Number.isFinite(value) || value <= 0) return 0
+  if (scale?.flat) return Math.ceil(levelCount / 2)
+  const thresholds = scale?.thresholds || []
+  return Math.min(levelCount, 1 + thresholds.filter((threshold) => value > threshold).length)
+}
+
+export function calendarCells(days = []) {
+  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date)).slice(-30)
+  if (!sorted.length) return Array.from({ length: 35 }, () => null)
+
+  const start = Date.parse(`${sorted[0].date}T00:00:00Z`)
+  if (!Number.isFinite(start)) return Array.from({ length: 35 }, () => null)
+  const leading = (new Date(start).getUTCDay() + 6) % 7
+  const last = Date.parse(`${sorted.at(-1).date}T00:00:00Z`)
+  const span = Number.isFinite(last) ? Math.round((last - start) / 86400000) + 1 : sorted.length
+  const rowCount = Math.max(5, Math.ceil((leading + span) / 7))
+  const cells = Array.from({ length: rowCount * 7 }, () => null)
   for (const day of sorted) {
-    const column = (new Date(`${day.date}T00:00:00Z`).getUTCDay() + 6) % 7
-    const row = occurrence[column]++
-    if (row < 5) cells[row * 7 + column] = day
+    const date = Date.parse(`${day.date}T00:00:00Z`)
+    if (!Number.isFinite(date)) continue
+    const index = leading + Math.round((date - start) / 86400000)
+    if (index >= 0 && index < cells.length) cells[index] = day
   }
   return cells
 }
@@ -65,16 +99,16 @@ export function week168(days = []) {
 
 export function hourTooltip(bucket, hour) {
   if (!bucket) return `${String(hour).padStart(2, '0')}:00 数据缺失`
-  return `${hourRange(hour)} · 输入 ${bucket.inputTokens}，缓存输入 ${bucket.cachedInputTokens}，输出 ${bucket.outputTokens}，推理输出 ${bucket.reasoningOutputTokens}，总计 ${bucket.totalTokens} tokens，活跃任务 ${bucket.activeThreads}`
+  return `${hourRange(hour)} · 输入 ${formatCompact(bucket.inputTokens)}，缓存输入 ${formatCompact(bucket.cachedInputTokens)}，输出 ${formatCompact(bucket.outputTokens)}，推理输出 ${formatCompact(bucket.reasoningOutputTokens)}，总计 ${formatCompact(bucket.totalTokens)} tokens，活跃任务 ${bucket.activeThreads}`
 }
 
 export function weekTooltip(day, hour, value) {
   const date = day?.date || '日期未知'
-  return `${date} ${hourRange(hour)} · ${value === null ? '数据缺失' : `${value} tokens`}`
+  return `${date} ${hourRange(hour)} · ${value === null ? '数据缺失' : `${formatCompact(value)} tokens`}`
 }
 
 export function dayTooltip(day) {
-  return `${day.date} · ${day.totalTokens} tokens`
+  return `${day.date} · ${formatCompact(day.totalTokens)} tokens`
 }
 
 export function reconcileSelection(selection, state) {
@@ -117,9 +151,11 @@ export function statusCopy(status, hasPartial) {
 
 export function formatCompact(value) {
   if (value == null) return '—'
+  const useCompactUnit = Math.abs(Number(value)) >= 1000
   return new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
+    notation: useCompactUnit ? 'compact' : 'standard',
+    minimumFractionDigits: useCompactUnit ? 1 : 0,
+    maximumFractionDigits: useCompactUnit ? 1 : 0,
   }).format(value)
 }
 

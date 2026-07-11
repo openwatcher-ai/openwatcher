@@ -8,21 +8,29 @@
         <QuotaRing
           label="5h"
           :window-data="quota?.fiveHour"
-          color="#ffad32"
-          :status="quotaStatus"
         />
         <QuotaRing
           label="7d"
           :window-data="quota?.weekly"
-          color="#a975ff"
-          :status="quotaStatus"
         />
       </div>
       <dl class="quota-details">
-        <div><dt>当前方案</dt><dd>{{ quota?.planType || '计划未知' }}</dd></div>
-        <div><dt>重置时间（5h）</dt><dd>{{ resetLabel(quota?.fiveHour?.resetAt) }}</dd></div>
-        <div><dt>重置时间（7d）</dt><dd>{{ resetLabel(quota?.weekly?.resetAt) }}</dd></div>
-        <div><dt>额度状态</dt><dd>{{ quotaNote }}</dd></div>
+        <div>
+          <span class="detail-icon plan"><Package :size="16" /></span>
+          <dt>当前方案</dt><dd>{{ quota?.planType || '计划未知' }}</dd>
+        </div>
+        <div>
+          <span class="detail-icon reset"><CalendarDays :size="16" /></span>
+          <dt>重置时间（5h）</dt><dd>{{ resetLabel(quota?.fiveHour?.resetAt) }}</dd>
+        </div>
+        <div>
+          <span class="detail-icon reset"><CalendarDays :size="16" /></span>
+          <dt>重置时间（7d）</dt><dd>{{ resetLabel(quota?.weekly?.resetAt) }}</dd>
+        </div>
+        <div>
+          <span class="detail-icon status"><Activity :size="16" /></span>
+          <dt>额度状态</dt><dd>{{ quotaNote }}</dd>
+        </div>
       </dl>
     </div>
   </section>
@@ -30,11 +38,14 @@
 
 <script setup>
 import { computed } from 'vue'
+import { Activity, CalendarDays, Package } from '@lucide/vue'
 import QuotaRing from './QuotaRing.vue'
 
-const props = defineProps({ quota: Object })
+const props = defineProps({
+  quota: Object,
+  timezone: { type: String, default: '' },
+})
 const cached = computed(() => props.quota?.fresh === false || props.quota?.status === 'stale')
-const quotaStatus = computed(() => cached.value ? '已缓存' : '正常')
 const quotaNote = computed(() => {
   if (!props.quota) return '数据不可用'
   if (props.quota.status === 'unavailable') return '暂不可用'
@@ -43,9 +54,19 @@ const quotaNote = computed(() => {
 
 function resetLabel(resetAt) {
   if (!resetAt) return '—'
-  const seconds = Math.max(0, resetAt - Date.now() / 1000)
-  if (seconds < 3600) return `${Math.ceil(seconds / 60)} 分钟后`
-  if (seconds < 24 * 3600) return `${Math.floor(seconds / 3600)} 小时后`
-  return `${Math.floor(seconds / 86400)} 天后`
+  try {
+    const parts = new Intl.DateTimeFormat('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      timeZone: props.timezone || undefined,
+    }).formatToParts(new Date(resetAt * 1000))
+    const value = (type) => parts.find((part) => part.type === type)?.value || '--'
+    return `${value('month')}-${value('day')} ${value('hour')}:${value('minute')}`
+  } catch {
+    return '时间未知'
+  }
 }
 </script>

@@ -1,25 +1,27 @@
 <template>
   <section data-ui-id="weekly-panel" class="quadrant weekly-panel">
     <div class="panel-heading">
-      <span class="eyebrow">最近 7 天 · 7×24</span>
-      <span class="legend">低 <i /> 高</span>
+      <span class="eyebrow">最近 7 天 × 24 小时</span>
     </div>
     <p v-if="!heatmap" class="local-empty">7 天热力数据不可用</p>
     <Heatmap7d
       v-else
       :days="heatmap.days"
-      :peak="heatmap.peakTokens"
       :selected="selected"
       @select="$emit('select', $event)"
       @hover="$emit('hover', $event)"
     />
+    <span
+      v-if="heatmap"
+      class="legend"
+      title="0 用量单独显示，非零用量按当前 7 天视图分为 5 个分位档"
+    >低 <i /> 高</span>
     <Tooltip :text="tooltip?.kind === 'week' ? tooltip.text : ''" />
   </section>
 
   <section data-ui-id="trend-panel" class="quadrant trend-panel">
     <div class="panel-heading">
       <span class="eyebrow">最近 30 天</span>
-      <strong>{{ trend ? `${trend.startDate || ''} — ${trend.endDate || ''}` : '30 天数据不可用' }}</strong>
     </div>
     <Calendar30d
       v-if="trend"

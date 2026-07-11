@@ -32,9 +32,9 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { week168, weekTooltip } from '../state/widget.js'
+import { buildHeatScale, heatScaleLevel, week168, weekTooltip } from '../state/widget.js'
 
-const props = defineProps({ days: Array, peak: Number, selected: Object })
+const props = defineProps({ days: Array, selected: Object })
 defineEmits(['select', 'hover'])
 
 const container = ref(null)
@@ -42,9 +42,10 @@ const body = ref(null)
 const grid = ref(null)
 const cellSize = ref(10)
 const rows = computed(() => week168(props.days))
+const scale = computed(() => buildHeatScale(rows.value.flatMap((row) => row.hours)))
 let observer
 
-const level = (value) => !value ? 'l0' : `l${Math.min(5, Math.ceil(value / Math.max(1, props.peak || 0) * 5))}`
+const level = (value) => `l${heatScaleLevel(value, scale.value)}`
 const label = (day, hour, value) => weekTooltip(day, hour, value)
 const item = (day, hour, value) => ({
   kind: 'week',

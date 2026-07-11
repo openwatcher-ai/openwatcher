@@ -3,8 +3,7 @@
     <header data-ui-id="overview-header" class="overview-header" style="--wails-draggable: drag">
       <h1 data-ui-id="overview-title">用量概览</h1>
       <div class="header-actions" style="--wails-draggable: no-drag">
-        <span class="status-dot" :class="state.status">{{ statusLabel }}</span>
-        <time class="updated">{{ updated }}</time>
+        <span class="status-dot" :class="state.status">{{ statusLabel }} · {{ updated }}</span>
         <span v-if="refreshFeedback" class="refresh-feedback" role="status">{{ refreshFeedback }}</span>
         <button
           class="icon-button"
@@ -52,11 +51,13 @@ defineEmits(['refresh', 'close', 'open-main'])
 const updated = computed(() => {
   if (!props.state?.observedAt) return '等待数据'
   try {
+    const observedAt = new Date(props.state.observedAt)
+    if (Date.now() - observedAt.getTime() < 90_000) return '刚刚更新'
     return new Intl.DateTimeFormat('zh-CN', {
       hour: '2-digit',
       minute: '2-digit',
       timeZone: props.state.timezone || 'Asia/Shanghai',
-    }).format(new Date(props.state.observedAt))
+    }).format(observedAt)
   } catch {
     return '时间未知'
   }

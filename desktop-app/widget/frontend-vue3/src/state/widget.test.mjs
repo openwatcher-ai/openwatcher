@@ -1,16 +1,27 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildHeatScale,
   calendarCells,
   composition,
+  dayTooltip,
   formatCompact,
+  hourTooltip,
   hours24,
+  heatScaleLevel,
   reconcileSelection,
   statusCopy,
+  weekTooltip,
   week168,
 } from './pure.mjs'
 
-test('30 个日期按全部七种起始星期映射到 35 个槽', () => {
+test('热力图保留零值档并将非零值分散到五个分位档', () => {
+  const scale = buildHeatScale([0, 1, 2, 3, 4, 1000])
+  assert.deepEqual([0, 1, 2, 3, 4, 1000].map((value) => heatScaleLevel(value, scale)), [0, 1, 2, 3, 4, 5])
+  assert.equal(heatScaleLevel(10, buildHeatScale([10, 10, 10])), 3)
+})
+
+test('30 个日期按自然周逐行递增，必要时使用第六行', () => {
   for (let shift = 0; shift < 7; shift++) {
     const start = new Date(Date.UTC(2026, 5, 1 + shift))
     const days = Array.from({ length: 30 }, (_, index) => ({
@@ -18,10 +29,22 @@ test('30 个日期按全部七种起始星期映射到 35 个槽', () => {
       totalTokens: index,
     }))
     const cells = calendarCells(days)
-    assert.equal(cells.length, 35)
+    const leading = (start.getUTCDay() + 6) % 7
+    assert.equal(cells.length, Math.max(35, Math.ceil((leading + 30) / 7) * 7))
     assert.equal(cells.filter(Boolean).length, 30)
-    assert.deepEqual(cells.filter(Boolean).map((item) => item.date).sort(), days.map((item) => item.date).sort())
+    assert.ok(cells.slice(0, leading).every((item) => item === null))
+    assert.deepEqual(cells.slice(leading, leading + 30).map((item) => item?.date), days.map((item) => item.date))
   }
+})
+
+test('30 天日历为缺失日期保留原星期位置', () => {
+  const cells = calendarCells([
+    { date: '2026-06-11', totalTokens: 1 },
+    { date: '2026-06-13', totalTokens: 3 },
+  ])
+  assert.equal(cells[3]?.date, '2026-06-11')
+  assert.equal(cells[4], null)
+  assert.equal(cells[5]?.date, '2026-06-13')
 })
 
 test('组成条不重复累计缓存输入，标签仍显示完整输入', () => {
@@ -80,4 +103,19 @@ test('状态中文文案覆盖连接与局部缺失', () => {
 test('大数值沿用手表端紧凑单位', () => {
   assert.equal(formatCompact(14800000), '14.8M')
   assert.equal(formatCompact(13400000000), '13.4B')
+  assert.equal(formatCompact(4000000), '4.0M')
+})
+
+test('热力方格提示统一使用紧凑 Token 单位', () => {
+  assert.equal(hourTooltip({
+    inputTokens: 14800000,
+    cachedInputTokens: 13400000,
+    outputTokens: 12500,
+    reasoningOutputTokens: 4000,
+    totalTokens: 14812500,
+    activeThreads: 2,
+  }, 3), '03:00–04:00 · 输入 14.8M，缓存输入 13.4M，输出 12.5K，推理输出 4.0K，总计 14.8M tokens，活跃任务 2')
+  assert.equal(weekTooltip({ date: '2026-07-12' }, 3, 12500), '2026-07-12 03:00–04:00 · 12.5K tokens')
+  assert.equal(dayTooltip({ date: '2026-07-12', totalTokens: 14800000 }), '2026-07-12 · 14.8M tokens')
+  assert.equal(dayTooltip({ date: '2026-07-12', totalTokens: 13400000000 }), '2026-07-12 · 13.4B tokens')
 })
