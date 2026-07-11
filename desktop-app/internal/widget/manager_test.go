@@ -2,7 +2,10 @@ package widget
 
 import (
 	"errors"
+	"io"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -240,6 +243,36 @@ func TestHelperCandidatesIncludePackagedAndDevelopmentLocations(t *testing.T) {
 	wantWindows := filepath.Join(root, "bundled", "widget", "windows-amd64", "openwatcher-widget.exe")
 	if !containsPath(windowsCandidates, wantWindows) {
 		t.Fatalf("Windows helper candidate missing: %q", windowsCandidates)
+	}
+}
+
+func TestStartProcessDeliversTokenThroughAnonymousPipe(t *testing.T) {
+	const (
+		helperMarker = "OPENWATCHER_WIDGET_STDIN_HELPER"
+		token        = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	)
+	if os.Getenv(helperMarker) == "1" {
+		payload, err := io.ReadAll(os.Stdin)
+		if err != nil || string(payload) != token+"\n" {
+			os.Exit(37)
+		}
+		for _, arg := range os.Args {
+			if strings.Contains(arg, token) {
+				os.Exit(38)
+			}
+		}
+		return
+	}
+
+	t.Setenv(helperMarker, "1")
+	for attempt := 0; attempt < 8; attempt++ {
+		process, err := startProcess(os.Args[0], token, "-test.run=^TestStartProcessDeliversTokenThroughAnonymousPipe$")
+		if err != nil {
+			t.Fatalf("start helper attempt %d: %v", attempt, err)
+		}
+		if err := process.Wait(); err != nil {
+			t.Fatalf("wait helper attempt %d: %v", attempt, err)
+		}
 	}
 }
 
