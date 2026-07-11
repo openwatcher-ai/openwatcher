@@ -1,0 +1,1 @@
+<template><div data-ui-id="today-composition" class="composition"><span v-for="part in parts" :key="part.kind" :class="part.color" :style="{width:`${part.fraction*100}%`}" :title="`${part.kind} ${part.value}`"/></div></template><script setup>defineProps({parts:Array})</script>

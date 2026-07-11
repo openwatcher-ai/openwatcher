@@ -1,0 +1,11 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "openwatcher-widget",
+  "outputfilename": "openwatcher-widget",
+  "frontend:dir": "frontend-vue3",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev": "npm run dev",
+  "author": { "name": "OpenWatcher", "email": "" },
+  "info": { "productName": "OpenWatcher Widget", "productVersion": "0.1.0", "copyright": "OpenWatcher" }
+}
