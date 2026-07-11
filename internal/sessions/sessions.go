@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log"
@@ -399,7 +400,12 @@ func contextPressurePercent(lastUsedTokens, modelContextWindow int64) int {
 	return pressure
 }
 
+var tokenCountEventMarker = []byte("token_count")
+
 func parseTokenCountEvent(line []byte) (tokenCountEvent, bool) {
+	if !bytes.Contains(line, tokenCountEventMarker) {
+		return tokenCountEvent{}, false
+	}
 	var event tokenCountEvent
 	if err := json.Unmarshal(line, &event); err != nil {
 		return tokenCountEvent{}, false

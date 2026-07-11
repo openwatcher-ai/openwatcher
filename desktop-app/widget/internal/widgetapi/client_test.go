@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"openwatcher/desktop-app/widget/internal/widgetvm"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -29,11 +31,147 @@ func TestValidatedURLOnlyAllowsPlainLoopbackRoot(t *testing.T) {
 		}
 	}
 }
-func TestRequiredQueryAndHeaderAreSetInGo(t *testing.T) {
+func TestSnapshotAndStreamQueriesSeparateMonthlyTrend(t *testing.T) {
 	u, _ := url.Parse(loopbackEndpoint + "/api/status")
-	req, err := request(context.Background(), u, "secret", false)
-	if err != nil || req.URL.Query().Get("includeDailyTrend30d") != "1" || req.URL.Query().Get("includeSessions") != "0" || req.Header.Get("X-OpenWatcher-Token") != "secret" {
+	req, err := request(context.Background(), u, "secret", false, false)
+	if err != nil || req.URL.Query().Has("includeDailyTrend30d") || req.URL.Query().Get("includeSessions") != "0" || req.Header.Get("X-OpenWatcher-Token") != "secret" {
 		t.Fatalf("%v %#v", err, req)
+	}
+	streamURL, _ := url.Parse(loopbackEndpoint + "/api/status/stream")
+	streamReq, err := request(context.Background(), streamURL, "secret", true, true)
+	if err != nil || streamReq.URL.Query().Get("includeDailyTrend30d") != "1" || streamReq.Header.Get("Accept") != "text/event-stream" {
+		t.Fatalf("%v %#v", err, streamReq)
+	}
+}
+
+type fixedClientClock struct{ now time.Time }
+
+func (c fixedClientClock) Now() time.Time                     { return c.now }
+func (fixedClientClock) After(time.Duration) <-chan time.Time { return make(chan time.Time) }
+
+type recordingTrendStore struct {
+	mu    sync.Mutex
+	trend *widgetvm.Trend30d
+	saves int
+	saved chan struct{}
+}
+
+func (s *recordingTrendStore) LoadTrend30d() *widgetvm.Trend30d {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.trend
+}
+func (s *recordingTrendStore) SaveTrend30d(trend *widgetvm.Trend30d) error {
+	s.mu.Lock()
+	s.trend = trend
+	s.saves++
+	saved := s.saved
+	s.mu.Unlock()
+	if saved != nil {
+		select {
+		case saved <- struct{}{}:
+		default:
+		}
+	}
+	return nil
+}
+func (s *recordingTrendStore) saveCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.saves
+}
+
+func TestCurrentTrendCacheLoadsAndStreamSnapshotPreservesIt(t *testing.T) {
+	clock := fixedClientClock{now: time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)}
+	store := &recordingTrendStore{trend: &widgetvm.Trend30d{EndDate: "2026-07-10", TotalTokens: 42}}
+	c := NewClientWithClock(loopbackEndpoint, NoTokenSource{}, clock, store)
+	if c.needsDailyTrend30d() || c.state.Trend30d == nil || c.state.Trend30d.TotalTokens != 42 {
+		t.Fatalf("cached trend was not restored: %+v", c.state)
+	}
+	c.applyEvent("status_snapshot", `{"observedAt":"2026-07-11T12:01:00+08:00","heatmap24h":{"timezone":"Asia/Shanghai"}}`)
+	if c.state.Trend30d == nil || c.state.Trend30d.TotalTokens != 42 {
+		t.Fatalf("stream snapshot dropped cached trend: %+v", c.state)
+	}
+}
+
+func TestFreshStreamTrendIsSavedAndStaleCacheRequestsReplacement(t *testing.T) {
+	clock := fixedClientClock{now: time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)}
+	store := &recordingTrendStore{trend: &widgetvm.Trend30d{EndDate: "2026-07-09"}}
+	c := NewClientWithClock(loopbackEndpoint, NoTokenSource{}, clock, store)
+	if !c.needsDailyTrend30d() || c.state.Trend30d != nil {
+		t.Fatalf("stale cache was accepted: %+v", c.state)
+	}
+	c.applyEvent("status_snapshot", `{"observedAt":"2026-07-11T12:01:00+08:00","dailyTrend30d":{"endDate":"2026-07-10","totalTokens":99}}`)
+	if store.saveCount() != 1 || c.state.Trend30d == nil || c.state.Trend30d.TotalTokens != 99 || c.needsDailyTrend30d() {
+		t.Fatalf("fresh trend was not persisted: saves=%d state=%+v", store.saveCount(), c.state)
+	}
+}
+
+func TestRunEmitsBasicSnapshotBeforeUncachedMonthlyTrend(t *testing.T) {
+	streamStarted := make(chan struct{})
+	releaseTrend := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/status":
+			if r.URL.Query().Has("includeDailyTrend30d") {
+				t.Errorf("basic snapshot unexpectedly requested monthly trend: %s", r.URL.RawQuery)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true,"observedAt":"2026-07-11T12:00:00+08:00","heatmap24h":{"timezone":"Asia/Shanghai","buckets":[]},"dailyUsage":{"totalTokens":7}}`))
+		case "/api/status/stream":
+			if r.URL.Query().Get("includeDailyTrend30d") != "1" {
+				t.Errorf("uncached stream did not request monthly trend: %s", r.URL.RawQuery)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			w.(http.Flusher).Flush()
+			close(streamStarted)
+			select {
+			case <-releaseTrend:
+				_, _ = w.Write([]byte("event: status_snapshot\ndata: {\"observedAt\":\"2026-07-11T12:00:01+08:00\",\"dailyTrend30d\":{\"endDate\":\"2026-07-10\",\"totalTokens\":99}}\n\n"))
+				w.(http.Flusher).Flush()
+			case <-r.Context().Done():
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	clock := fixedClientClock{now: time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)}
+	store := &recordingTrendStore{saved: make(chan struct{}, 1)}
+	client := NewClientWithClock(server.URL, fixedToken{}, clock, store)
+	states := make(chan widgetvm.State, 8)
+	go client.Run(ctx, func(state widgetvm.State) { states <- state })
+
+	select {
+	case state := <-states:
+		if state.Status != widgetvm.Online || state.Today == nil || state.Today.TotalTokens != 7 || state.Trend30d != nil {
+			t.Fatalf("basic state was not emitted first: %+v", state)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("basic state was blocked by monthly trend")
+	}
+	select {
+	case <-streamStarted:
+	case <-time.After(time.Second):
+		t.Fatal("monthly trend stream did not start")
+	}
+	close(releaseTrend)
+	select {
+	case state := <-states:
+		if state.Trend30d == nil || state.Trend30d.TotalTokens != 99 {
+			t.Fatalf("monthly trend was not applied asynchronously: state=%+v", state)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("monthly trend was not emitted")
+	}
+	select {
+	case <-store.saved:
+	case <-time.After(time.Second):
+		t.Fatal("monthly trend was not persisted")
 	}
 }
 func TestSnapshotViewModelDoesNotExposeConversationData(t *testing.T) {

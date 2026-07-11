@@ -45,14 +45,18 @@ func (s *fileStore) Save(p Position) error {
 	if !valid(p) {
 		return errors.New("invalid widget position")
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0700); err != nil {
+	return writePrivateJSON(s.path, ".widget-position-*", p)
+}
+
+func writePrivateJSON(path, pattern string, value any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	b, err := json.Marshal(p)
+	b, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(s.path), ".widget-position-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), pattern)
 	if err != nil {
 		return err
 	}
@@ -73,7 +77,7 @@ func (s *fileStore) Save(p Position) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(name, s.path)
+	return os.Rename(name, path)
 }
 func valid(p Position) bool {
 	return p.Edge == "left" || p.Edge == "right" || p.Edge == "top" || p.Edge == "bottom" || p.Edge == ""

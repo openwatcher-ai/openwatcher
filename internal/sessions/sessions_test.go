@@ -82,6 +82,16 @@ func TestSnapshotAtReadsThreadMetadataAndContextPressure(t *testing.T) {
 	}
 }
 
+func TestParseTokenCountEventAcceptsWhitespaceAndRejectsIrrelevantPayloads(t *testing.T) {
+	valid := []byte(`{"timestamp":"2026-06-03T01:20:00Z","type":"event_msg","payload":{"type" : "token_count","info":{"total_token_usage":{"total_tokens":10}}}}`)
+	if event, ok := parseTokenCountEvent(valid); !ok || event.Payload.Info.TotalTokenUsage.TotalTokens != 10 {
+		t.Fatalf("valid token_count event was rejected: %#v, %v", event, ok)
+	}
+	if _, ok := parseTokenCountEvent([]byte(`{"type":"response_item","payload":{"text":"large irrelevant payload"}}`)); ok {
+		t.Fatal("irrelevant payload was accepted")
+	}
+}
+
 func TestSnapshotAtAddsContextCompactionFromHookState(t *testing.T) {
 	home := t.TempDir()
 	codexHome := filepath.Join(home, ".codex")

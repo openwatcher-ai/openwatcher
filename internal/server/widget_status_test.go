@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ func TestStatusStreamOmitsSessionsForInitialSnapshot(t *testing.T) {
 	token := "0123456789abcdef0123456789abcdef"
 	cfg := config.Config{TokenHash: pairing.HashToken(token)}
 	cfg.ApplyDefaults()
-	source := newMutableSessions(fakeSessions{}.mustSnapshot(t))
+	source := newTrendCountingSessions(fakeSessions{}.mustSnapshot(t))
 	app := New(filepath.Join(t.TempDir(), "config.json"), cfg, false, fakeQuota{}, source)
 	app.statusStreamPollInterval = 5 * time.Millisecond
 	app.streamHeartbeatInterval = time.Hour
@@ -93,6 +94,25 @@ func TestStatusStreamOmitsSessionsForInitialSnapshot(t *testing.T) {
 	if !strings.Contains(body, `"dailyTrend30d"`) {
 		t.Fatalf("daily trend missing from stream body: %s", body)
 	}
+	if got := source.trendRequests.Load(); got != 1 {
+		t.Fatalf("daily trend was recomputed after initial stream snapshot: %d", got)
+	}
+}
+
+type trendCountingSessions struct {
+	*mutableSessions
+	trendRequests atomic.Int32
+}
+
+func newTrendCountingSessions(snapshot sessions.Snapshot) *trendCountingSessions {
+	return &trendCountingSessions{mutableSessions: newMutableSessions(snapshot)}
+}
+
+func (s *trendCountingSessions) SnapshotWithOptions(options sessions.SnapshotOptions) (sessions.Snapshot, error) {
+	if options.IncludeDailyTrend30d {
+		s.trendRequests.Add(1)
+	}
+	return s.mutableSessions.SnapshotWithOptions(options)
 }
 
 func TestWidgetHandlerIsIndependentLoopbackReadOnlyRoute(t *testing.T) {

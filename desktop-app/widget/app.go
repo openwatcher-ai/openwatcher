@@ -16,6 +16,7 @@ type AppDependencies struct {
 	Endpoint    string
 	TokenSource widgetapi.TokenSource
 	Prefs       widgetprefs.Store
+	TrendStore  widgetapi.TrendStore
 	Platform    Platform
 }
 type Platform interface {
@@ -42,10 +43,13 @@ func NewApp(deps AppDependencies) *App {
 	if deps.Prefs == nil {
 		deps.Prefs = widgetprefs.NewFileStore(widgetprefs.DefaultPath(userHome()))
 	}
+	if deps.TrendStore == nil {
+		deps.TrendStore = widgetprefs.NewTrendFileStore(widgetprefs.DefaultTrendPath(userHome()))
+	}
 	if deps.Platform == nil {
 		deps.Platform = nativePlatform{}
 	}
-	return &App{state: widgetvm.InitialState(), client: widgetapi.NewClient(deps.Endpoint, deps.TokenSource), prefs: deps.Prefs, platform: deps.Platform, window: widgetwindow.DefaultGeometry()}
+	return &App{state: widgetvm.InitialState(), client: widgetapi.NewClient(deps.Endpoint, deps.TokenSource, deps.TrendStore), prefs: deps.Prefs, platform: deps.Platform, window: widgetwindow.DefaultGeometry()}
 }
 func userHome() string {
 	h, err := os.UserHomeDir()
