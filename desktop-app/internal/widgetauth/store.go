@@ -16,6 +16,7 @@ var (
 	ErrNotFound          = errors.New("未找到悬浮球凭据")
 	ErrUnsupported       = errors.New("当前平台不支持悬浮球凭据存储")
 	ErrInvalidCredential = errors.New("悬浮球凭据无效")
+	ErrCredentialAccess  = errors.New("Keychain 未授权当前安装访问悬浮球凭据，请重新授权")
 	configMu             sync.Mutex
 )
 
@@ -122,6 +123,33 @@ func (s *ConfigSynchronizer) Rotate(store SecretStore, configPath string) error 
 		}
 		if restoreErr != nil {
 			return fmt.Errorf("%w；恢复原凭据失败: %v", err, restoreErr)
+		}
+		return err
+	}
+	return nil
+}
+
+// Reset 不读取受保护的旧值，直接替换凭据。用于修复 Keychain ACL
+// 不再信任本地重建 Desktop 二进制的情况。
+func (s *ConfigSynchronizer) Reset(store SecretStore, configPath string) error {
+	if store == nil {
+		return ErrUnsupported
+	}
+	configMu.Lock()
+	defer configMu.Unlock()
+	if err := store.Delete(); err != nil {
+		return fmt.Errorf("清理旧的悬浮球凭据失败: %w", err)
+	}
+	token, err := GenerateToken()
+	if err != nil {
+		return err
+	}
+	if err := store.Write(token); err != nil {
+		return fmt.Errorf("写入新的悬浮球凭据失败: %w", err)
+	}
+	if err := syncTokenHash(configPath, token); err != nil {
+		if deleteErr := store.Delete(); deleteErr != nil {
+			return fmt.Errorf("%w；清理未启用的新凭据失败: %v", err, deleteErr)
 		}
 		return err
 	}

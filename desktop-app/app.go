@@ -377,7 +377,7 @@ func (a *App) RepairFloatingWidgetCredential() (widget.Status, error) {
 	if a.widgetStore == nil {
 		a.widgetStore = widgetauth.NewSystemStore()
 	}
-	err := a.widgetSync.Rotate(a.widgetStore, settings.BackendConfigPath())
+	err := a.widgetSync.Reset(a.widgetStore, settings.BackendConfigPath())
 	a.setWidgetCredentialResult(err)
 	if err != nil {
 		return a.GetFloatingWidgetStatus(), err

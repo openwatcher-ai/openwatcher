@@ -25,6 +25,10 @@ static OSStatus widget_read(const char *service, const char *account, char **out
   CFDictionarySetValue(query, kSecAttrAccount, acc);
   CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue);
   CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  CFDictionarySetValue(query, kSecUseAuthenticationUI, kSecUseAuthenticationUIFail);
+#pragma clang diagnostic pop
   st = SecItemCopyMatching(query, &result);
   if (st != errSecSuccess) { goto cleanup; }
   if (result == NULL || CFGetTypeID(result) != CFDataGetTypeID()) { st = errSecDecode; goto cleanup; }
@@ -83,6 +87,10 @@ static OSStatus widget_delete(const char *service, const char *account) {
   CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword);
   CFDictionarySetValue(query, kSecAttrService, svc);
   CFDictionarySetValue(query, kSecAttrAccount, acc);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  CFDictionarySetValue(query, kSecUseAuthenticationUI, kSecUseAuthenticationUIFail);
+#pragma clang diagnostic pop
   st = SecItemDelete(query);
 cleanup:
   if (query != NULL) CFRelease(query);
@@ -119,6 +127,9 @@ func (s systemStore) Read() (string, error) {
 	if st == C.errSecItemNotFound {
 		return "", ErrNotFound
 	}
+	if st == C.errSecInteractionNotAllowed || st == C.errSecAuthFailed {
+		return "", ErrCredentialAccess
+	}
 	if st != C.errSecSuccess {
 		return "", fmt.Errorf("读取 Keychain 悬浮球凭据失败: %d", st)
 	}
@@ -151,6 +162,9 @@ func (s systemStore) Delete() error {
 	st := C.widget_delete(service, account)
 	if st == C.errSecItemNotFound {
 		return nil
+	}
+	if st == C.errSecInteractionNotAllowed || st == C.errSecAuthFailed {
+		return ErrCredentialAccess
 	}
 	if st != C.errSecSuccess {
 		return fmt.Errorf("删除 Keychain 悬浮球凭据失败: %d", st)

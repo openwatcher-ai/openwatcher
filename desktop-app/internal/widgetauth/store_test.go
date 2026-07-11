@@ -149,6 +149,33 @@ func TestRotateRestoresPreviousCredentialWhenConfigWriteFails(t *testing.T) {
 	}
 }
 
+func TestResetReplacesCredentialWithoutReadingOldValue(t *testing.T) {
+	store := &deleteFirstStore{token: "inaccessible"}
+	path := filepath.Join(t.TempDir(), "config.json")
+	var synchronizer ConfigSynchronizer
+	if err := synchronizer.Reset(store, path); err != nil {
+		t.Fatal(err)
+	}
+	if store.readCount != 0 || store.deleteCount != 1 || ValidateToken(store.token) != nil {
+		t.Fatalf("reset store = %+v", store)
+	}
+	cfg, _, err := config.Load(path)
+	if err != nil || cfg.WidgetTokenHash != pairing.HashToken(store.token) {
+		t.Fatalf("reset hash mismatch: %+v, %v", cfg, err)
+	}
+}
+
+func TestResetDeletesNewCredentialWhenConfigWriteFails(t *testing.T) {
+	store := &deleteFirstStore{token: "inaccessible"}
+	var synchronizer ConfigSynchronizer
+	if err := synchronizer.Reset(store, t.TempDir()); err == nil {
+		t.Fatal("Reset unexpectedly succeeded with a directory config path")
+	}
+	if store.readCount != 0 || store.deleteCount != 2 || store.token != "" {
+		t.Fatalf("failed reset left credential behind: %+v", store)
+	}
+}
+
 type recordingStore struct {
 	token      string
 	writeCount int
@@ -166,3 +193,20 @@ func (s *recordingStore) Write(token string) error {
 	return nil
 }
 func (s *recordingStore) Delete() error { s.token = ""; return nil }
+
+type deleteFirstStore struct {
+	token       string
+	readCount   int
+	deleteCount int
+}
+
+func (s *deleteFirstStore) Read() (string, error) {
+	s.readCount++
+	return "", errors.New("protected value must not be read during reset")
+}
+func (s *deleteFirstStore) Write(token string) error { s.token = token; return nil }
+func (s *deleteFirstStore) Delete() error {
+	s.deleteCount++
+	s.token = ""
+	return nil
+}
