@@ -219,7 +219,7 @@
    - 只接受 Widget 专用凭据，并拒绝其他路径和方法。
 
 3. **openwatcher-widget Go 层**
-   - 从系统凭据存储读取 Widget token。
+   - 在启动时从 Desktop 创建的匿名标准输入管道读取一次 Widget token，只保存在进程内存中。
    - 通过 Go HTTP 客户端请求完整快照并维护 SSE。
    - 将原始响应转换成不含会话数组的 Widget ViewModel。
    - 通过 Wails 事件把结构化状态发送给 Vue。
@@ -237,8 +237,8 @@
 ### 9.3 运行时数据流
 
 1. Desktop 启动后读取 Widget 偏好；启用时确认专用凭据存在并启动辅助程序。
-2. sidecar 建立独立 loopback 状态监听，Desktop 将非敏感的 endpoint 通过受限启动握手交给辅助程序；token 不放入命令行或环境变量。
-3. Widget Go 层从系统凭据存储读取 token。
+2. sidecar 建立独立 loopback 状态监听，Desktop 将非敏感 endpoint 放入启动参数，并通过仅连接父子进程的匿名标准输入管道传递 token；token 不放入命令行或环境变量。
+3. Widget Go 层在进入 Wails 运行循环前读取并校验 token，随后关闭管道；Vue 与窗口状态均无法访问该值。
 4. Widget 先请求完整快照，再连接 SSE。
 5. Go 层验证和归一化响应，Vue 只收到额度、图表、价值、状态和时间字段。
 6. 关闭主窗口只隐藏控制台，不停止辅助程序；显式退出 OpenWatcher 时先停止辅助程序，再停止 sidecar。
@@ -301,6 +301,7 @@ loopback Widget 监听只开放上述两个 GET 路径。即使主 sidecar 以 n
 - Widget 使用独立的强随机凭据，与 watch pairing slot 完全分离。
 - sidecar 配置只保存 token 哈希，不保存原文。
 - 原始 token 在 macOS 存入 Keychain，在 Windows 存入 Credential Manager。
+- Desktop 每次启动辅助程序时从系统凭据存储读取 token，并通过匿名管道一次性传递；辅助程序不直接共享 Keychain 或 Credential Manager 权限。
 - token 不得出现在命令行参数、环境变量、日志、诊断包、URL、Vue 状态、localStorage 或崩溃报告中。
 - HTTP/SSE 由 Go 层发起，Vue WebView 无法读取 token。
 - Widget 状态监听只绑定 127.0.0.1 或 ::1，并再次校验 RemoteAddr 为 loopback。

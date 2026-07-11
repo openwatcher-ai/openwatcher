@@ -7,8 +7,9 @@ import (
 )
 
 type DesktopSettings struct {
-	AutoStartBackend     bool                         `json:"autoStartBackend"`
-	DeveloperEnvironment DeveloperEnvironmentSettings `json:"developerEnvironment"`
+	AutoStartBackend      bool                         `json:"autoStartBackend"`
+	FloatingWidgetEnabled bool                         `json:"floatingWidgetEnabled"`
+	DeveloperEnvironment  DeveloperEnvironmentSettings `json:"developerEnvironment"`
 }
 
 type DeveloperEnvironmentSettings struct {
@@ -23,7 +24,8 @@ type DeveloperEnvironmentSettings struct {
 
 func DefaultDesktopSettings() DesktopSettings {
 	return DesktopSettings{
-		AutoStartBackend: true,
+		AutoStartBackend:      true,
+		FloatingWidgetEnabled: true,
 		DeveloperEnvironment: DeveloperEnvironmentSettings{
 			Enabled:    false,
 			Mode:       "workspace",
@@ -50,6 +52,14 @@ func LoadDesktopSettings() (DesktopSettings, error) {
 	loaded := defaults
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		return defaults, err
+	}
+	// A present file without this field is an upgrade, not a new install.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return defaults, err
+	}
+	if _, ok := raw["floatingWidgetEnabled"]; !ok {
+		loaded.FloatingWidgetEnabled = false
 	}
 	return loaded, nil
 }

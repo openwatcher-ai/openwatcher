@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"openwatcher/desktop-app/internal/widgettransport"
 	"openwatcher/desktop-app/widget/internal/widgetvm"
 )
 
@@ -81,10 +82,7 @@ func loopbackTransport() *http.Transport {
 	}
 }
 func ValidEndpoint(endpoint string) bool {
-	if endpoint == "" {
-		return true
-	}
-	_, err := validatedURL(endpoint, "/api/status")
+	_, err := widgettransport.ParseEndpoint(endpoint)
 	return err == nil
 }
 
@@ -524,15 +522,12 @@ func (c *Client) update(fn func(*widgetvm.State)) {
 	}
 }
 func validatedURL(base, path string) (*url.URL, error) {
-	if base == "" {
-		return nil, errors.New("服务地址未配置")
-	}
-	u, err := url.Parse(base)
-	if err != nil || u.Scheme != "http" || u.User != nil || u.Fragment != "" || u.RawQuery != "" || u.Hostname() == "" || (u.Path != "" && u.Path != "/") {
+	canonical, err := widgettransport.ParseEndpoint(base)
+	if err != nil {
 		return nil, errors.New("服务地址无效")
 	}
-	ip := net.ParseIP(u.Hostname())
-	if ip == nil || !ip.IsLoopback() {
+	u, err := url.Parse(canonical)
+	if err != nil {
 		return nil, errors.New("服务地址无效")
 	}
 	u.Path = path

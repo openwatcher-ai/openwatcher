@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ func TestManagerStartBackendRecordsArgsAndLogs(t *testing.T) {
 		Listen:        freeLoopbackListen(t),
 		PublicBaseURL: "https://public.example/openwatcher/",
 		PairingSlot:   "dev",
+		WidgetListen:  "127.0.0.1:0",
 	}
 	t.Cleanup(func() {
 		_ = h.manager.StopBackend(context.Background())
@@ -66,6 +68,7 @@ func TestManagerStartBackendRecordsArgsAndLogs(t *testing.T) {
 		"--listen", cfg.Listen,
 		"--public-base-url", "https://public.example/openwatcher",
 		"--pairing-slot", "dev",
+		"--widget-listen", "127.0.0.1:0",
 	})
 
 	status := h.manager.DesktopStatus()
@@ -85,6 +88,58 @@ func TestManagerStartBackendRecordsArgsAndLogs(t *testing.T) {
 	assertLogContains(t, logs, "stderr pairing code=[REDACTED]")
 	assertLogNotContains(t, logs, "secret-token")
 	assertLogNotContains(t, logs, "889900")
+}
+
+func TestManagerWidgetEndpointLifecycle(t *testing.T) {
+	h := newBackendHarness(t, fakesidecar.State{})
+	cfg := StartConfig{Listen: freeLoopbackListen(t), WidgetListen: "127.0.0.1:0"}
+	if err := h.manager.StartBackend(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	endpoint, err := h.manager.WaitForWidgetEndpoint(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(endpoint, "http://127.0.0.1:") {
+		t.Fatalf("endpoint=%q", endpoint)
+	}
+	if err := h.manager.StopBackend(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.manager.WidgetEndpoint() != "" {
+		t.Fatal("stale endpoint after stop")
+	}
+	if _, ok := parseWidgetEndpointLine("OPENWATCHER_WIDGET_ENDPOINT=https://127.0.0.1:1"); ok {
+		t.Fatal("accepted non-http endpoint")
+	}
+	if _, ok := parseWidgetEndpointLine("OPENWATCHER_WIDGET_ENDPOINT=http://example.com:1"); ok {
+		t.Fatal("accepted non-loopback endpoint")
+	}
+}
+
+func TestManagerWidgetEndpointWaitTimesOutWithoutStatusLine(t *testing.T) {
+	m := NewManager(NewBinaryLocator(t.TempDir()), logging.NewRedactor())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	if _, err := m.WaitForWidgetEndpoint(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitForWidgetEndpoint err = %v, want deadline", err)
+	}
+}
+
+func TestManagerIgnoresMalformedWidgetEndpointStatusLine(t *testing.T) {
+	h := newBackendHarness(t, fakesidecar.State{WidgetEndpoint: "https://127.0.0.1:9999"})
+	cfg := StartConfig{Listen: freeLoopbackListen(t), WidgetListen: "127.0.0.1:0"}
+	if err := h.manager.StartBackend(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.manager.StopBackend(context.Background()) })
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if _, err := h.manager.WaitForWidgetEndpoint(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitForWidgetEndpoint err = %v, want deadline", err)
+	}
 }
 
 func TestManagerCheckHealthMalformed(t *testing.T) {
@@ -156,9 +211,9 @@ func TestManagerCrashClassifiesProcessErrors(t *testing.T) {
 
 func TestManagerStopAndRestart(t *testing.T) {
 	h := newBackendHarness(t, fakesidecar.State{})
-	cfg1 := StartConfig{Listen: freeLoopbackListen(t), PairingSlot: "beta"}
+	cfg1 := StartConfig{Listen: freeLoopbackListen(t), PairingSlot: "beta", WidgetListen: "127.0.0.1:0"}
 	cfg1.PublicBaseURL = "http://" + cfg1.Listen
-	cfg2 := StartConfig{Listen: freeLoopbackListen(t), PairingSlot: "dev"}
+	cfg2 := StartConfig{Listen: freeLoopbackListen(t), PairingSlot: "dev", WidgetListen: "127.0.0.1:0"}
 	cfg2.PublicBaseURL = "http://" + cfg2.Listen
 	t.Cleanup(func() {
 		_ = h.manager.StopBackend(context.Background())
@@ -170,6 +225,10 @@ func TestManagerStopAndRestart(t *testing.T) {
 	waitForHealth(t, h.manager, cfg1, func(status HealthStatus, err error) bool {
 		return err == nil && status.OK
 	})
+	firstEndpoint, err := h.manager.WaitForWidgetEndpoint(context.Background())
+	if err != nil || firstEndpoint == "" {
+		t.Fatalf("first widget endpoint = %q err=%v", firstEndpoint, err)
+	}
 
 	if err := h.manager.RestartBackend(context.Background(), cfg2); err != nil {
 		t.Fatalf("RestartBackend err = %v", err)
@@ -177,6 +236,10 @@ func TestManagerStopAndRestart(t *testing.T) {
 	health := waitForHealth(t, h.manager, cfg2, func(status HealthStatus, err error) bool {
 		return err == nil && status.OK
 	})
+	secondEndpoint, err := h.manager.WaitForWidgetEndpoint(context.Background())
+	if err != nil || secondEndpoint == "" || secondEndpoint == firstEndpoint {
+		t.Fatalf("second widget endpoint = %q err=%v", secondEndpoint, err)
+	}
 	if health.Config.Listen != cfg2.Listen || health.Config.PairingSlot != "dev" {
 		t.Fatalf("health after restart = %+v", health)
 	}

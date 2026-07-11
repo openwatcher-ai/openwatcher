@@ -20,6 +20,7 @@ type State struct {
 	CrashMessage   string   `json:"crashMessage,omitempty"`
 	StdoutLines    []string `json:"stdoutLines,omitempty"`
 	StderrLines    []string `json:"stderrLines,omitempty"`
+	WidgetEndpoint string   `json:"widgetEndpoint,omitempty"`
 }
 
 type CommandRecord struct {
@@ -28,6 +29,7 @@ type CommandRecord struct {
 	Listen        string   `json:"listen,omitempty"`
 	PublicBaseURL string   `json:"publicBaseUrl,omitempty"`
 	PairingSlot   string   `json:"pairingSlot,omitempty"`
+	WidgetListen  string   `json:"widgetListen,omitempty"`
 }
 
 func BinaryName() string {
@@ -120,6 +122,7 @@ func runProcess(args []string) int {
 		Listen:        cfg.listen,
 		PublicBaseURL: cfg.publicBaseURL,
 		PairingSlot:   cfg.pairingSlot,
+		WidgetListen:  cfg.widgetListen,
 	})
 	writeConfiguredOutput(state)
 
@@ -142,6 +145,19 @@ func runProcess(args []string) int {
 	defer listener.Close()
 
 	fmt.Fprintf(os.Stdout, "fake sidecar listening on %s\n", listener.Addr().String())
+	if cfg.widgetListen != "" {
+		endpoint := state.WidgetEndpoint
+		if endpoint == "" {
+			l, e := net.Listen("tcp", cfg.widgetListen)
+			if e != nil {
+				fmt.Fprintln(os.Stderr, e.Error())
+				return 1
+			}
+			defer l.Close()
+			endpoint = "http://" + l.Addr().String()
+		}
+		fmt.Fprintln(os.Stdout, "OPENWATCHER_WIDGET_ENDPOINT="+endpoint)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		code := state.HealthHTTPCode
@@ -203,6 +219,7 @@ type serveConfig struct {
 	listen        string
 	publicBaseURL string
 	pairingSlot   string
+	widgetListen  string
 }
 
 func parseArgs(args []string) serveConfig {
@@ -226,6 +243,11 @@ func parseArgs(args []string) serveConfig {
 		case "--pairing-slot":
 			if i+1 < len(args) {
 				cfg.pairingSlot = args[i+1]
+				i++
+			}
+		case "--widget-listen":
+			if i+1 < len(args) {
+				cfg.widgetListen = args[i+1]
 				i++
 			}
 		}

@@ -132,6 +132,7 @@ func (a *App) StartBackendWithRequest(request BackendRequest) backend.DesktopSta
 	} else {
 		_ = a.backendManager.StartBackend(a.processContext(), cfg)
 	}
+	a.syncWidgetHelper(false)
 	health := a.postStartHealthCheck(request, cfg)
 	status := a.backendManager.DesktopStatus()
 	status.LastHealth = &health
@@ -150,6 +151,7 @@ func (a *App) RestartBackendWithRequest(request BackendRequest) backend.DesktopS
 	}
 	_ = a.tunnelManager.Stop(context.Background())
 	_ = a.backendManager.RestartBackend(a.processContext(), cfg)
+	a.syncWidgetHelper(false)
 	health := a.postStartHealthCheck(request, cfg)
 	status := a.backendManager.DesktopStatus()
 	status.LastHealth = &health
@@ -855,6 +857,7 @@ func (a *App) startConfigFromRequest(request BackendRequest) backend.StartConfig
 		Listen:        listen,
 		PublicBaseURL: publicBaseURL,
 		PairingSlot:   string(rootconfig.PairingSlotBeta),
+		WidgetListen:  a.widgetListenAddress(),
 	})
 }
 
@@ -1537,7 +1540,8 @@ func (a *App) backendNeedsRestart(cfg backend.StartConfig) bool {
 	}
 	return strings.TrimSpace(status.ConfiguredListen) != cfg.Listen ||
 		rootconfig.NormalizePublicBaseURL(status.ConfiguredPublicBaseURL) != cfg.PublicBaseURL ||
-		strings.TrimSpace(status.ConfiguredPairingSlot) != strings.TrimSpace(cfg.PairingSlot)
+		strings.TrimSpace(status.ConfiguredPairingSlot) != strings.TrimSpace(cfg.PairingSlot) ||
+		strings.TrimSpace(status.ConfiguredWidgetListen) != strings.TrimSpace(cfg.WidgetListen)
 }
 
 func trimConfigPathLabel(path string) string {
