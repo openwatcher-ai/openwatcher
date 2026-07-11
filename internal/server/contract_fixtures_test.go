@@ -139,7 +139,7 @@ func buildContractStatusSSE(t *testing.T, response statusResponse) []byte {
 	writeContractSSE(t, &buf, "status_sessions", statusEventID("status_sessions", response.ObservedAt), statusSessionsEvent{
 		Type:       "status_sessions",
 		ObservedAt: response.ObservedAt,
-		Sessions:   response.Sessions,
+		Sessions:   statusResponseSessions(response),
 	})
 	writeContractSSE(t, &buf, "status_errors", statusEventID("status_errors", response.ObservedAt), statusErrorsEvent{
 		Type:       "status_errors",

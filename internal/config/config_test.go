@@ -9,8 +9,9 @@ import (
 func TestSaveWritesPrivateConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	cfg := Config{
-		TokenHash:     "hash",
-		PublicBaseURL: "https://example.test/",
+		TokenHash:       "hash",
+		WidgetTokenHash: "widget-hash",
+		PublicBaseURL:   "https://example.test/",
 	}
 
 	if err := Save(path, cfg); err != nil {
@@ -46,6 +47,23 @@ func TestSaveWritesPrivateConfig(t *testing.T) {
 	}
 	if loaded.DiagnosticUploadDir != DefaultDiagnosticUploadDir {
 		t.Fatalf("DiagnosticUploadDir = %q, want default %q", loaded.DiagnosticUploadDir, DefaultDiagnosticUploadDir)
+	}
+	if loaded.WidgetTokenHash != "widget-hash" {
+		t.Fatalf("WidgetTokenHash = %q, want widget-hash", loaded.WidgetTokenHash)
+	}
+}
+
+func TestWidgetTokenHashIsIndependentFromPairingSlots(t *testing.T) {
+	cfg := Config{TokenHash: "beta-hash", WidgetTokenHash: "widget-hash"}
+	cfg.ApplyDefaults()
+
+	cfg.SetPairingForSlot(PairingSlotBeta, "new-beta-hash", "watch", "now")
+	if cfg.WidgetTokenHash != "widget-hash" {
+		t.Fatalf("WidgetTokenHash changed with beta pairing: %q", cfg.WidgetTokenHash)
+	}
+	cfg.SetPairingForSlot(PairingSlotDev, "new-dev-hash", "dev", "now")
+	if cfg.WidgetTokenHash != "widget-hash" {
+		t.Fatalf("WidgetTokenHash changed with dev pairing: %q", cfg.WidgetTokenHash)
 	}
 }
 

@@ -106,6 +106,52 @@ func (a *App) Handler() http.Handler {
 	return mux
 }
 
+// WidgetHandler exposes only the loopback, read-only status contract for the desktop widget.
+// It intentionally does not use the main service's no-auth switch or pairing slot.
+func (a *App) WidgetHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/status", a.handleWidgetStatus)
+	mux.HandleFunc("/api/status/stream", a.handleWidgetStatusStream)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !requestFromLoopback(r) {
+			writeError(w, http.StatusForbidden, "loopback only")
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+
+func (a *App) handleWidgetStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if !a.widgetAuthorized(r) {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	writeJSON(w, http.StatusOK, a.buildStatusResponse(statusResponseOptions{
+		IncludeDailyTrend30d: parseBoolQuery(r.URL.Query().Get("includeDailyTrend30d")),
+		IncludeSessions:      false,
+	}))
+}
+
+func (a *App) handleWidgetStatusStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if !a.widgetAuthorized(r) {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	// Reuse the status stream implementation after the independent checks above.
+	a.handleStatusStreamWithOptions(w, r, statusResponseOptions{
+		IncludeDailyTrend30d: parseBoolQuery(r.URL.Query().Get("includeDailyTrend30d")),
+		IncludeSessions:      false,
+	})
+}
+
 func (a *App) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -417,6 +463,7 @@ func (a *App) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	response := a.buildStatusResponse(statusResponseOptions{
 		IncludeDailyTrend30d: parseBoolQuery(r.URL.Query().Get("includeDailyTrend30d")),
+		IncludeSessions:      parseIncludeSessions(r.URL.Query().Get("includeSessions")),
 	})
 	writeJSON(w, http.StatusOK, response)
 }
@@ -431,6 +478,13 @@ func (a *App) handleStatusStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	a.handleStatusStreamWithOptions(w, r, statusResponseOptions{
+		IncludeDailyTrend30d: parseBoolQuery(r.URL.Query().Get("includeDailyTrend30d")),
+		IncludeSessions:      parseIncludeSessions(r.URL.Query().Get("includeSessions")),
+	})
+}
+
+func (a *App) handleStatusStreamWithOptions(w http.ResponseWriter, r *http.Request, options statusResponseOptions) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "streaming unavailable")
@@ -443,9 +497,7 @@ func (a *App) handleStatusStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 
-	current := a.buildStatusResponse(statusResponseOptions{
-		IncludeDailyTrend30d: parseBoolQuery(r.URL.Query().Get("includeDailyTrend30d")),
-	})
+	current := a.buildStatusResponse(options)
 	fingerprints := statusResponseFingerprints(current)
 	writeStatusSnapshotEvent(w, flusher, current)
 
@@ -467,12 +519,12 @@ func (a *App) handleStatusStream(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-pollTicker.C:
-			next := a.buildStatusResponse(statusResponseOptions{})
+			next := a.buildStatusResponse(options)
 			nextFingerprints := statusResponseFingerprints(next)
 			if nextFingerprints.Quota != fingerprints.Quota {
 				writeStatusQuotaEvent(w, flusher, next)
 			}
-			if nextFingerprints.Sessions != fingerprints.Sessions {
+			if options.IncludeSessions && nextFingerprints.Sessions != fingerprints.Sessions {
 				writeStatusSessionsEvent(w, flusher, next)
 			}
 			if nextFingerprints.Heatmap24h != fingerprints.Heatmap24h ||
@@ -634,6 +686,13 @@ func parseBoolQuery(value string) bool {
 	}
 }
 
+func parseIncludeSessions(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return true
+	}
+	return parseBoolQuery(value)
+}
+
 func (a *App) handleSessionStreamClientEvent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -685,12 +744,13 @@ func (a *App) handleLocalDebugStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := a.buildStatusResponse(statusResponseOptions{})
+	response := a.buildStatusResponse(statusResponseOptions{IncludeSessions: true})
 	writeJSON(w, http.StatusOK, response)
 }
 
 type statusResponseOptions struct {
 	IncludeDailyTrend30d bool
+	IncludeSessions      bool
 }
 
 func (a *App) buildStatusResponse(options statusResponseOptions) statusResponse {
@@ -733,6 +793,14 @@ func (a *App) buildStatusResponse(options statusResponseOptions) statusResponse 
 		}
 	}
 
+	var responseSessions *[]sessions.SessionSnapshot
+	if options.IncludeSessions {
+		includedSessions := sessionSnapshot.Sessions
+		if includedSessions == nil {
+			includedSessions = []sessions.SessionSnapshot{}
+		}
+		responseSessions = &includedSessions
+	}
 	response := statusResponse{
 		OK:            true,
 		ObservedAt:    a.clock().Format(time.RFC3339),
@@ -741,10 +809,12 @@ func (a *App) buildStatusResponse(options statusResponseOptions) statusResponse 
 		Heatmap7d:     heatmap7d,
 		DailyUsage:    dailyUsage,
 		DailyTrend30d: dailyTrend30d,
-		Sessions:      sessionSnapshot.Sessions,
+		Sessions:      responseSessions,
 		Errors:        errors,
 	}
-	a.logContextCompactionTransitions(response.Sessions)
+	if options.IncludeSessions {
+		a.logContextCompactionTransitions(statusResponseSessions(response))
+	}
 	return response
 }
 
@@ -836,6 +906,13 @@ func (a *App) authorized(r *http.Request) bool {
 	return pairing.VerifyTokenHash(token, tokenHash)
 }
 
+func (a *App) widgetAuthorized(r *http.Request) bool {
+	a.mu.RLock()
+	tokenHash := strings.TrimSpace(a.cfg.WidgetTokenHash)
+	a.mu.RUnlock()
+	return pairing.VerifyTokenHash(watcherHeaderValue(r.Header, "Token"), tokenHash)
+}
+
 func requestFromLoopback(r *http.Request) bool {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -853,7 +930,7 @@ type statusResponse struct {
 	Heatmap7d     *sessions.Heatmap7dSnapshot  `json:"heatmap7d,omitempty"`
 	DailyUsage    *dailyUsageResponse          `json:"dailyUsage,omitempty"`
 	DailyTrend30d *dailyTrend30dResponse       `json:"dailyTrend30d,omitempty"`
-	Sessions      []sessions.SessionSnapshot   `json:"sessions"`
+	Sessions      *[]sessions.SessionSnapshot  `json:"sessions,omitempty"`
 	Errors        []string                     `json:"errors"`
 }
 
@@ -1061,9 +1138,16 @@ func statusResponseFingerprints(response statusResponse) statusFingerprints {
 		Heatmap24h: stableJSON(fingerprintHeatmap(response.Heatmap24h)),
 		Heatmap7d:  stableJSON(fingerprintHeatmap7d(response.Heatmap7d)),
 		DailyUsage: stableJSON(fingerprintDailyUsage(response.DailyUsage)),
-		Sessions:   stableJSON(fingerprintSessions(response.Sessions)),
+		Sessions:   stableJSON(fingerprintSessions(statusResponseSessions(response))),
 		Errors:     stableJSON(response.Errors),
 	}
+}
+
+func statusResponseSessions(response statusResponse) []sessions.SessionSnapshot {
+	if response.Sessions == nil {
+		return nil
+	}
+	return *response.Sessions
 }
 
 type heatmapFingerprint struct {
@@ -1214,7 +1298,7 @@ func writeStatusSessionsEvent(w http.ResponseWriter, flusher http.Flusher, respo
 	writeSSE(w, flusher, "status_sessions", statusEventID("status_sessions", response.ObservedAt), statusSessionsEvent{
 		Type:       "status_sessions",
 		ObservedAt: response.ObservedAt,
-		Sessions:   response.Sessions,
+		Sessions:   statusResponseSessions(response),
 	})
 }
 
