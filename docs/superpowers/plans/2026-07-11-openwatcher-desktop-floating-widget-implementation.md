@@ -73,7 +73,7 @@
 4. Backend StartConfig 增加 WidgetListen，Desktop 主 sidecar 使用 127.0.0.1:0。
 5. Backend Manager 解析 sidecar 的结构化 endpoint 行，并通过状态或等待方法提供给 Desktop。
 6. helper Manager 负责定位、启动、停止、单实例、三次限频重启和 endpoint 变化后的重启。
-7. helper 命令行只接收非敏感 endpoint；凭据由 helper 自己从系统存储读取。
+7. helper 命令行只接收非敏感 endpoint；Desktop 从系统存储读取凭据，并通过匿名标准输入管道一次性传给 helper，避免依赖跨应用 Keychain 权限组。
 8. DesktopSettings 增加 FloatingWidgetEnabled，并通过原始 JSON 字段存在性实现：新文件默认 true，旧文件缺字段迁移 false。
 9. startup 在 sidecar 前准备凭据和 hash；启用时启动 helper。shutdown 先停 helper 再停 sidecar。
 10. 手动启动、停止和重启 sidecar 后刷新 helper endpoint。

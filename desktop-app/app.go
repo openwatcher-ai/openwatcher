@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"openwatcher/desktop-app/internal/adb"
@@ -19,6 +20,8 @@ import (
 	desktopruntime "openwatcher/desktop-app/internal/runtime"
 	"openwatcher/desktop-app/internal/settings"
 	"openwatcher/desktop-app/internal/tunnel"
+	"openwatcher/desktop-app/internal/widget"
+	"openwatcher/desktop-app/internal/widgetauth"
 	rootconfig "openwatcher/internal/config"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -39,6 +42,14 @@ type App struct {
 	runtimeManager    *desktopruntime.Manager
 	tunnelManager     *tunnel.Manager
 	devTunnelManager  *tunnel.Manager
+	widgetManager     *widget.Manager
+	widgetStore       widgetauth.SecretStore
+	widgetSync        *widgetauth.ConfigSynchronizer
+	widgetStateMu     sync.Mutex
+	widgetReady       bool
+	widgetSetupError  string
+	widgetWaitCancel  context.CancelFunc
+	widgetWaitGen     uint64
 }
 
 type Snapshot struct {
@@ -76,12 +87,14 @@ type DiagnosticsPayload struct {
 }
 
 type DesktopSettingsState struct {
-	AutoStartBackend     bool                                  `json:"autoStartBackend"`
-	DeveloperEnvironment settings.DeveloperEnvironmentSettings `json:"developerEnvironment"`
+	AutoStartBackend      bool                                  `json:"autoStartBackend"`
+	FloatingWidgetEnabled bool                                  `json:"floatingWidgetEnabled"`
+	DeveloperEnvironment  settings.DeveloperEnvironmentSettings `json:"developerEnvironment"`
 }
 
 func NewApp() *App {
 	redactor := logging.NewRedactor()
+	widgetStore := widgetauth.NewSystemStore()
 	runtimeManager := desktopruntime.NewManager(settings.AppRoot(), desktopVersion())
 	manager := backend.NewManager(
 		backend.NewBinaryLocator(settings.AppRoot()),
@@ -102,6 +115,9 @@ func NewApp() *App {
 		runtimeManager:    runtimeManager,
 		tunnelManager:     tunnel.NewManager(settings.AppRoot(), runtimeManager, redactor),
 		devTunnelManager:  tunnel.NewNamedManager(settings.AppRoot(), runtimeManager, redactor, "managed-dev-tunnel", "开发环境托管隧道"),
+		widgetManager:     widget.NewManager(settings.AppRoot(), widgetauth.StoreTokenSource{Store: widgetStore}),
+		widgetStore:       widgetStore,
+		widgetSync:        &widgetauth.ConfigSynchronizer{},
 	}
 }
 
@@ -110,8 +126,12 @@ func (a *App) startup(ctx context.Context) {
 	a.processCtx, a.processCancel = context.WithCancel(ctx)
 	a.installStatusItem()
 	desktopSettings, _ := settings.LoadDesktopSettings()
+	if a.widgetManager != nil {
+		_ = a.prepareWidgetCredential()
+	}
 	if desktopSettings.AutoStartBackend {
 		_ = a.backendManager.StartBackend(a.processContext(), a.backendStartConfig())
+		a.syncWidgetHelper(false)
 	}
 	if desktopSettings.DeveloperEnvironment.Enabled {
 		_ = a.ensureDeveloperEnvironmentFromSettings(desktopSettings.DeveloperEnvironment)
@@ -129,11 +149,16 @@ func (a *App) domReady(ctx context.Context) {
 }
 
 func (a *App) shutdown(context.Context) {
-	if a.processCancel != nil {
-		a.processCancel()
+	a.cancelWidgetSync()
+	if a.widgetManager != nil {
+		_ = a.widgetManager.Stop()
 	}
-	_ = a.tunnelManager.Stop(context.Background())
-	_ = a.backendManager.StopBackend(context.Background())
+	if a.tunnelManager != nil {
+		_ = a.tunnelManager.Stop(context.Background())
+	}
+	if a.backendManager != nil {
+		_ = a.backendManager.StopBackend(context.Background())
+	}
 	if a.devBackendManager != nil {
 		_ = a.devBackendManager.StopBackend(context.Background())
 	}
@@ -142,6 +167,9 @@ func (a *App) shutdown(context.Context) {
 	}
 	if a.devTunnelManager != nil {
 		_ = a.devTunnelManager.Stop(context.Background())
+	}
+	if a.processCancel != nil {
+		a.processCancel()
 	}
 }
 
@@ -219,10 +247,15 @@ func (a *App) StartBackend() backend.DesktopStatus {
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	_, _ = a.backendManager.CheckHealth(ctx)
 	cancel()
+	a.syncWidgetHelper(false)
 	return a.backendManager.DesktopStatus()
 }
 
 func (a *App) StopBackend() backend.DesktopStatus {
+	a.cancelWidgetSync()
+	if a.widgetManager != nil {
+		_ = a.widgetManager.Stop()
+	}
 	_ = a.tunnelManager.Stop(context.Background())
 	_ = a.backendManager.StopBackend(context.Background())
 	return a.backendManager.DesktopStatus()
@@ -233,6 +266,7 @@ func (a *App) RestartBackend() backend.DesktopStatus {
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	_, _ = a.backendManager.CheckHealth(ctx)
 	cancel()
+	a.syncWidgetHelper(false)
 	return a.backendManager.DesktopStatus()
 }
 
@@ -254,8 +288,9 @@ func (a *App) CopyDiagnostics() string {
 func (a *App) GetDesktopSettings() DesktopSettingsState {
 	loaded, _ := settings.LoadDesktopSettings()
 	return DesktopSettingsState{
-		AutoStartBackend:     loaded.AutoStartBackend,
-		DeveloperEnvironment: loaded.DeveloperEnvironment,
+		AutoStartBackend:      loaded.AutoStartBackend,
+		FloatingWidgetEnabled: loaded.FloatingWidgetEnabled,
+		DeveloperEnvironment:  loaded.DeveloperEnvironment,
 	}
 }
 
@@ -269,9 +304,209 @@ func (a *App) SetAutoStartBackend(enabled bool) (DesktopSettingsState, error) {
 		return DesktopSettingsState{}, err
 	}
 	return DesktopSettingsState{
-		AutoStartBackend:     loaded.AutoStartBackend,
-		DeveloperEnvironment: loaded.DeveloperEnvironment,
+		AutoStartBackend:      loaded.AutoStartBackend,
+		FloatingWidgetEnabled: loaded.FloatingWidgetEnabled,
+		DeveloperEnvironment:  loaded.DeveloperEnvironment,
 	}, nil
+}
+
+// GetFloatingWidgetStatus is a deliberately small Wails surface for the settings UI.
+func (a *App) GetFloatingWidgetStatus() widget.Status {
+	status := widget.Status{}
+	if a.widgetManager != nil {
+		status = a.widgetManager.Status()
+	}
+	loaded, err := settings.LoadDesktopSettings()
+	if err == nil {
+		status.Enabled = loaded.FloatingWidgetEnabled
+	}
+	if !status.Enabled {
+		return status
+	}
+	a.widgetStateMu.Lock()
+	setupError := a.widgetSetupError
+	a.widgetStateMu.Unlock()
+	if setupError != "" {
+		status.Message = setupError
+		return status
+	}
+	if a.backendManager == nil || !a.backendManager.DesktopStatus().Running {
+		status.Message = "本机服务未运行，悬浮球将在服务启动后显示"
+	} else if !status.Running && status.Message == "" {
+		status.Message = "悬浮球正在等待本机服务"
+	}
+	return status
+}
+
+func (a *App) SetFloatingWidgetEnabled(enabled bool) (DesktopSettingsState, error) {
+	loaded, err := settings.LoadDesktopSettings()
+	if err != nil {
+		loaded = settings.DefaultDesktopSettings()
+	}
+	if enabled {
+		if err := a.prepareWidgetCredential(); err != nil {
+			return desktopSettingsState(loaded), err
+		}
+	}
+	loaded.FloatingWidgetEnabled = enabled
+	if err := settings.SaveDesktopSettings(loaded); err != nil {
+		return DesktopSettingsState{}, err
+	}
+	if !enabled {
+		a.cancelWidgetSync()
+		if a.widgetManager != nil {
+			_ = a.widgetManager.Stop()
+		}
+	} else {
+		if err := a.ensureBackendWidgetListener(); err != nil {
+			return desktopSettingsState(loaded), err
+		}
+		a.syncWidgetHelper(true)
+	}
+	return desktopSettingsState(loaded), nil
+}
+
+func (a *App) RepairFloatingWidgetCredential() (widget.Status, error) {
+	a.cancelWidgetSync()
+	if a.widgetManager != nil {
+		_ = a.widgetManager.Stop()
+	}
+	if a.widgetSync == nil {
+		a.widgetSync = &widgetauth.ConfigSynchronizer{}
+	}
+	if a.widgetStore == nil {
+		a.widgetStore = widgetauth.NewSystemStore()
+	}
+	err := a.widgetSync.Rotate(a.widgetStore, settings.BackendConfigPath())
+	a.setWidgetCredentialResult(err)
+	if err != nil {
+		return a.GetFloatingWidgetStatus(), err
+	}
+	if a.backendManager != nil && a.backendManager.DesktopStatus().Running {
+		cfg := a.backendManager.LastStartConfig()
+		cfg.WidgetListen = a.widgetListenAddress()
+		if err := a.backendManager.RestartBackend(a.processContext(), cfg); err != nil {
+			return a.GetFloatingWidgetStatus(), err
+		}
+	}
+	a.syncWidgetHelper(true)
+	return a.GetFloatingWidgetStatus(), nil
+}
+
+func (a *App) prepareWidgetCredential() error {
+	if a.widgetSync == nil {
+		a.widgetSync = &widgetauth.ConfigSynchronizer{}
+	}
+	if a.widgetStore == nil {
+		a.widgetStore = widgetauth.NewSystemStore()
+	}
+	err := a.widgetSync.Ensure(a.widgetStore, settings.BackendConfigPath())
+	a.setWidgetCredentialResult(err)
+	return err
+}
+
+func (a *App) setWidgetCredentialResult(err error) {
+	a.widgetStateMu.Lock()
+	a.widgetReady = err == nil
+	if err == nil {
+		a.widgetSetupError = ""
+	} else {
+		a.widgetSetupError = err.Error()
+	}
+	a.widgetStateMu.Unlock()
+}
+
+func (a *App) syncWidgetHelper(explicit bool) {
+	if a.widgetManager == nil || a.backendManager == nil {
+		return
+	}
+	loaded, err := settings.LoadDesktopSettings()
+	if err != nil || !loaded.FloatingWidgetEnabled {
+		a.cancelWidgetSync()
+		return
+	}
+	a.widgetStateMu.Lock()
+	if !a.widgetReady {
+		a.widgetStateMu.Unlock()
+		return
+	}
+	if a.widgetWaitCancel != nil {
+		a.widgetWaitCancel()
+	}
+	a.widgetWaitGen++
+	generation := a.widgetWaitGen
+	ctx, cancel := context.WithTimeout(a.processContext(), 5*time.Second)
+	a.widgetWaitCancel = cancel
+	a.widgetStateMu.Unlock()
+	go func() {
+		defer func() {
+			cancel()
+			a.widgetStateMu.Lock()
+			if generation == a.widgetWaitGen {
+				a.widgetWaitCancel = nil
+			}
+			a.widgetStateMu.Unlock()
+		}()
+		endpoint, err := a.backendManager.WaitForWidgetEndpoint(ctx)
+		if err != nil {
+			return
+		}
+		a.widgetStateMu.Lock()
+		if generation != a.widgetWaitGen || ctx.Err() != nil {
+			a.widgetStateMu.Unlock()
+			return
+		}
+		if explicit {
+			_ = a.widgetManager.Enable(endpoint)
+		} else if !a.widgetManager.Status().Enabled {
+			_ = a.widgetManager.Resume(endpoint)
+		} else {
+			_ = a.widgetManager.UpdateEndpoint(endpoint)
+		}
+		a.widgetStateMu.Unlock()
+	}()
+}
+
+func (a *App) cancelWidgetSync() {
+	a.widgetStateMu.Lock()
+	a.widgetWaitGen++
+	if a.widgetWaitCancel != nil {
+		a.widgetWaitCancel()
+		a.widgetWaitCancel = nil
+	}
+	a.widgetStateMu.Unlock()
+}
+
+func (a *App) widgetListenAddress() string {
+	a.widgetStateMu.Lock()
+	defer a.widgetStateMu.Unlock()
+	if !a.widgetReady {
+		return ""
+	}
+	return "127.0.0.1:0"
+}
+
+func (a *App) ensureBackendWidgetListener() error {
+	if a.backendManager == nil || !a.backendManager.DesktopStatus().Running {
+		return nil
+	}
+	cfg := a.backendManager.LastStartConfig()
+	if strings.TrimSpace(cfg.WidgetListen) != "" {
+		return nil
+	}
+	cfg.WidgetListen = a.widgetListenAddress()
+	if cfg.WidgetListen == "" {
+		return widgetauth.ErrInvalidCredential
+	}
+	return a.backendManager.RestartBackend(a.processContext(), cfg)
+}
+
+func desktopSettingsState(loaded settings.DesktopSettings) DesktopSettingsState {
+	return DesktopSettingsState{
+		AutoStartBackend:      loaded.AutoStartBackend,
+		FloatingWidgetEnabled: loaded.FloatingWidgetEnabled,
+		DeveloperEnvironment:  loaded.DeveloperEnvironment,
+	}
 }
 
 func (a *App) CheckForUpdates(currentWatchVersion string) (desktopruntime.UpdateCheckResult, error) {

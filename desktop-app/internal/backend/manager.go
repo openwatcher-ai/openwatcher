@@ -14,6 +14,7 @@ import (
 
 	"openwatcher/desktop-app/internal/logging"
 	"openwatcher/desktop-app/internal/processutil"
+	"openwatcher/desktop-app/internal/widgettransport"
 	rootconfig "openwatcher/internal/config"
 )
 
@@ -22,6 +23,7 @@ type StartConfig struct {
 	Listen        string `json:"listen"`
 	PublicBaseURL string `json:"publicBaseUrl"`
 	PairingSlot   string `json:"pairingSlot,omitempty"`
+	WidgetListen  string `json:"widgetListen,omitempty"`
 }
 
 type DesktopStatus struct {
@@ -38,6 +40,8 @@ type DesktopStatus struct {
 	ConfiguredListen        string        `json:"configuredListen,omitempty"`
 	ConfiguredPublicBaseURL string        `json:"configuredPublicBaseUrl,omitempty"`
 	ConfiguredPairingSlot   string        `json:"configuredPairingSlot,omitempty"`
+	ConfiguredWidgetListen  string        `json:"configuredWidgetListen,omitempty"`
+	WidgetEndpoint          string        `json:"widgetEndpoint,omitempty"`
 	LastHealth              *HealthStatus `json:"lastHealth,omitempty"`
 }
 
@@ -81,20 +85,23 @@ type Manager struct {
 	locator  *BinaryLocator
 	redactor *logging.Redactor
 
-	mu         sync.Mutex
-	cmd        *exec.Cmd
-	logs       []LogLine
-	startedAt  time.Time
-	resolved   ResolvedBinary
-	lastHealth *HealthStatus
-	lastStart  StartConfig
-	lastError  string
+	mu             sync.Mutex
+	cmd            *exec.Cmd
+	logs           []LogLine
+	startedAt      time.Time
+	resolved       ResolvedBinary
+	lastHealth     *HealthStatus
+	lastStart      StartConfig
+	lastError      string
+	widgetEndpoint string
+	widgetChanged  chan struct{}
 }
 
 func NewManager(locator *BinaryLocator, redactor *logging.Redactor) *Manager {
 	return &Manager{
-		locator:  locator,
-		redactor: redactor,
+		locator:       locator,
+		redactor:      redactor,
+		widgetChanged: make(chan struct{}),
 	}
 }
 
@@ -106,6 +113,7 @@ func (m *Manager) StartBackend(ctx context.Context, cfg StartConfig) error {
 		return nil
 	}
 	cfg = normalizeStartConfig(cfg)
+	m.clearWidgetEndpointLocked()
 
 	resolved, err := m.locator.Resolve()
 	if err != nil {
@@ -126,6 +134,9 @@ func (m *Manager) StartBackend(ctx context.Context, cfg StartConfig) error {
 	}
 	if strings.TrimSpace(cfg.PairingSlot) != "" {
 		args = append(args, "--pairing-slot", cfg.PairingSlot)
+	}
+	if strings.TrimSpace(cfg.WidgetListen) != "" {
+		args = append(args, "--widget-listen", cfg.WidgetListen)
 	}
 
 	cmd := exec.CommandContext(ctx, resolved.Path, args...)
@@ -162,6 +173,7 @@ func (m *Manager) StopBackend(context.Context) error {
 	}
 	err := m.cmd.Process.Kill()
 	m.cmd = nil
+	m.clearWidgetEndpointLocked()
 	m.lastError = ""
 	m.appendLocked("backend sidecar stopped")
 	return err
@@ -257,6 +269,8 @@ func (m *Manager) DesktopStatus() DesktopStatus {
 		ConfiguredListen:        m.lastStart.Listen,
 		ConfiguredPublicBaseURL: m.lastStart.PublicBaseURL,
 		ConfiguredPairingSlot:   m.lastStart.PairingSlot,
+		ConfiguredWidgetListen:  m.lastStart.WidgetListen,
+		WidgetEndpoint:          m.widgetEndpoint,
 		RecentLogCount:          len(m.logs),
 		LastHealth:              m.lastHealth,
 	}
@@ -292,7 +306,13 @@ func (m *Manager) captureStream(stream interface{ Read([]byte) (int, error) }) {
 	scanner := bufio.NewScanner(stream)
 	for scanner.Scan() {
 		m.mu.Lock()
-		m.appendLocked(scanner.Text())
+		line := scanner.Text()
+		if endpoint, ok := parseWidgetEndpointLine(line); ok {
+			m.widgetEndpoint = endpoint
+			m.signalWidgetChangedLocked()
+		} else {
+			m.appendLocked(line)
+		}
 		m.mu.Unlock()
 	}
 }
@@ -333,6 +353,7 @@ func (m *Manager) waitForExit(cmd *exec.Cmd) {
 		return
 	}
 	m.cmd = nil
+	m.clearWidgetEndpointLocked()
 	if err != nil {
 		m.lastError = classifyProcessError(err.Error(), m.logs)
 		m.appendLocked("backend sidecar exited: " + m.lastError)
@@ -357,7 +378,51 @@ func normalizeStartConfig(cfg StartConfig) StartConfig {
 		cfg.PublicBaseURL = rootconfig.DefaultPublicBaseURL(cfg.Listen)
 	}
 	cfg.PairingSlot = strings.TrimSpace(cfg.PairingSlot)
+	cfg.WidgetListen = strings.TrimSpace(cfg.WidgetListen)
 	return cfg
+}
+
+const widgetEndpointPrefix = "OPENWATCHER_WIDGET_ENDPOINT="
+
+func parseWidgetEndpointLine(line string) (string, bool) {
+	if !strings.HasPrefix(strings.TrimSpace(line), widgetEndpointPrefix) {
+		return "", false
+	}
+	raw := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), widgetEndpointPrefix))
+	endpoint, err := widgettransport.ParseEndpoint(raw)
+	if err != nil {
+		return "", false
+	}
+	return endpoint, true
+}
+
+func (m *Manager) WidgetEndpoint() string { m.mu.Lock(); defer m.mu.Unlock(); return m.widgetEndpoint }
+
+func (m *Manager) LastStartConfig() StartConfig {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.lastStart
+}
+
+func (m *Manager) WaitForWidgetEndpoint(ctx context.Context) (string, error) {
+	for {
+		m.mu.Lock()
+		endpoint, changed := m.widgetEndpoint, m.widgetChanged
+		m.mu.Unlock()
+		if endpoint != "" {
+			return endpoint, nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-changed:
+		}
+	}
+}
+func (m *Manager) clearWidgetEndpointLocked() { m.widgetEndpoint = ""; m.signalWidgetChangedLocked() }
+func (m *Manager) signalWidgetChangedLocked() {
+	close(m.widgetChanged)
+	m.widgetChanged = make(chan struct{})
 }
 
 func deriveHealthEndpoint(cfg StartConfig) string {
