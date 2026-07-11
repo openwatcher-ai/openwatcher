@@ -17,6 +17,7 @@ const (
 type State struct {
 	Status       ConnectionStatus `json:"status"`
 	Expanded     bool             `json:"expanded"`
+	AnchorCorner string           `json:"anchorCorner,omitempty"`
 	ObservedAt   string           `json:"observedAt,omitempty"`
 	Timezone     string           `json:"timezone,omitempty"`
 	LastActionAt time.Time        `json:"-"`

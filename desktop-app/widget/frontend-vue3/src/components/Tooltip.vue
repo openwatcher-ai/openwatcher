@@ -1,1 +1,1 @@
-<template><div v-if="visible" class="tooltip" role="tooltip"><slot/></div></template><script setup>defineProps({visible:Boolean})</script>
+<template><div v-if="text" class="tooltip" role="tooltip">{{ text }}</div></template><script setup>defineProps({text:{type:String,default:''}})</script>

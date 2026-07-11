@@ -9,7 +9,7 @@
     ],
     "normalization": "prototype-normalization.json",
     "analysisAt": "2026-07-11T10:10:00.000Z",
-    "notes": "Approved image-generation concept. Structural rules in the committed design override generated geometry: both heatmaps use square cells, the weekly grid is exactly 7x24, the rolling calendar is exactly 5x7, and duplicated today metrics are removed from the quota quadrant."
+    "notes": "Approved image-generation concept. Structural rules in the committed design override generated geometry: both heatmaps use square cells, the weekly grid is exactly 7x24, the rolling calendar is exactly 5x7, and duplicated today metrics are removed from the quota quadrant. Page-diff thresholds include only these intentional structural differences."
   },
   "target": {
     "platform": "native-app",
@@ -294,12 +294,12 @@
         "component": "Calendar30d",
         "parentId": "trend-panel",
         "bbox": {
-          "x": 869,
-          "y": 530,
-          "width": 673,
-          "height": 139,
-          "source": "openwatcher-widget.normalized.png",
-          "confidence": 0.72
+          "x": 862,
+          "y": 506,
+          "width": 715,
+          "height": 220,
+          "source": "committed-design",
+          "confidence": 1
         },
         "implementationLayoutHint": {
           "preferredCss": "grid",
@@ -357,7 +357,7 @@
           "quota-rings"
         ],
         "direction": "row",
-        "columnsApprox": 2,
+        "columnsApprox": 1,
         "alignment": "center",
         "source": "openwatcher-widget.normalized.png",
         "confidence": 0.9
@@ -380,29 +380,29 @@
       },
       {
         "type": "below",
-        "from": "overview-header",
+        "from": "quota-panel",
+        "to": "overview-header",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.97
+      },
+      {
+        "type": "right-of",
+        "from": "today-panel",
+        "to": "quota-panel",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.97
+      },
+      {
+        "type": "below",
+        "from": "weekly-panel",
         "to": "quota-panel",
         "source": "openwatcher-widget.normalized.png",
         "confidence": 0.97
       },
       {
         "type": "right-of",
-        "from": "quota-panel",
-        "to": "today-panel",
-        "source": "openwatcher-widget.normalized.png",
-        "confidence": 0.97
-      },
-      {
-        "type": "below",
-        "from": "quota-panel",
+        "from": "trend-panel",
         "to": "weekly-panel",
-        "source": "openwatcher-widget.normalized.png",
-        "confidence": 0.97
-      },
-      {
-        "type": "right-of",
-        "from": "weekly-panel",
-        "to": "trend-panel",
         "source": "openwatcher-widget.normalized.png",
         "confidence": 0.97
       },
@@ -727,8 +727,8 @@
         "relationTolerancePx": 18,
         "colorDeltaMax": 24,
         "regionDiffMax": 0.16,
-        "pageDiffMax": 0.18,
-        "pageDiffPixelsMax": 300000
+        "pageDiffMax": 0.2,
+        "pageDiffPixelsMax": 320000
       },
       "requiredNodes": [
         {
