@@ -26,6 +26,17 @@ type Clock interface {
 	Now() time.Time
 	After(time.Duration) <-chan time.Time
 }
+
+type TrendStore interface {
+	LoadTrend30d() *widgetvm.Trend30d
+	SaveTrend30d(*widgetvm.Trend30d) error
+}
+
+type NoTrendStore struct{}
+
+func (NoTrendStore) LoadTrend30d() *widgetvm.Trend30d      { return nil }
+func (NoTrendStore) SaveTrend30d(*widgetvm.Trend30d) error { return nil }
+
 type realClock struct{}
 
 func (realClock) Now() time.Time                         { return time.Now() }
@@ -34,6 +45,7 @@ func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) 
 type Client struct {
 	endpoint                 string
 	tokenSource              TokenSource
+	trendStore               TrendStore
 	snapshotHTTP, streamHTTP *http.Client
 	clock                    Clock
 	mu                       sync.Mutex
@@ -44,26 +56,35 @@ type Client struct {
 	lastActivity             time.Time
 }
 
-func NewClient(endpoint string, source TokenSource) *Client {
-	return NewClientWithClock(endpoint, source, realClock{})
+func NewClient(endpoint string, source TokenSource, trends ...TrendStore) *Client {
+	return NewClientWithClock(endpoint, source, realClock{}, trends...)
 }
-func NewClientWithClock(endpoint string, source TokenSource, clock Clock) *Client {
+func NewClientWithClock(endpoint string, source TokenSource, clock Clock, trends ...TrendStore) *Client {
 	if source == nil {
 		source = NoTokenSource{}
 	}
 	if clock == nil {
 		clock = realClock{}
 	}
+	trendStore := TrendStore(NoTrendStore{})
+	if len(trends) > 0 && trends[0] != nil {
+		trendStore = trends[0]
+	}
+	state := widgetvm.InitialState()
+	if cached := trendStore.LoadTrend30d(); trendIsCurrent(cached, clock.Now()) {
+		state.Trend30d = cached
+	}
 	return &Client{
 		endpoint:    endpoint,
 		tokenSource: source,
+		trendStore:  trendStore,
 		snapshotHTTP: &http.Client{
 			Timeout:   12 * time.Second,
 			Transport: loopbackTransport(),
 		},
 		streamHTTP: &http.Client{Transport: loopbackTransport()},
 		clock:      clock,
-		state:      widgetvm.InitialState(),
+		state:      state,
 		refresh:    make(chan struct{}, 1),
 	}
 }
@@ -90,7 +111,11 @@ func ValidEndpoint(endpoint string) bool {
 func (c *Client) Run(ctx context.Context, emit func(widgetvm.State)) {
 	c.mu.Lock()
 	c.emit = emit
+	initial := c.state
 	c.mu.Unlock()
+	if initial.Trend30d != nil && emit != nil {
+		emit(initial)
+	}
 	backoff := time.Second
 	for {
 		if ctx.Err() != nil {
@@ -121,7 +146,11 @@ func (c *Client) Run(ctx context.Context, emit func(widgetvm.State)) {
 		c.update(func(s *widgetvm.State) {
 			expanded := s.Expanded
 			anchorCorner := s.AnchorCorner
+			trend := s.Trend30d
 			*s = snapshot
+			if s.Trend30d == nil {
+				s.Trend30d = trend
+			}
 			s.Expanded = expanded
 			s.AnchorCorner = anchorCorner
 			s.Status = widgetvm.Online
@@ -201,7 +230,7 @@ func (c *Client) fetch(ctx context.Context, token string) (widgetvm.State, int, 
 	if err != nil {
 		return widgetvm.State{}, 0, err
 	}
-	req, err := request(ctx, u, token, false)
+	req, err := request(ctx, u, token, false, false)
 	if err != nil {
 		return widgetvm.State{}, 0, err
 	}
@@ -219,9 +248,13 @@ func (c *Client) fetch(ctx context.Context, token string) (widgetvm.State, int, 
 	}
 	return dto.state(), res.StatusCode, nil
 }
-func request(ctx context.Context, u *url.URL, token string, stream bool) (*http.Request, error) {
+func request(ctx context.Context, u *url.URL, token string, stream, includeDailyTrend30d bool) (*http.Request, error) {
 	q := u.Query()
-	q.Set("includeDailyTrend30d", "1")
+	if includeDailyTrend30d {
+		q.Set("includeDailyTrend30d", "1")
+	} else {
+		q.Del("includeDailyTrend30d")
+	}
 	q.Set("includeSessions", "0")
 	u.RawQuery = q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -252,7 +285,7 @@ func (c *Client) stream(parent context.Context, token string) (manual, auth bool
 	if err != nil {
 		return false, false
 	}
-	req, err := request(ctx, u, token, true)
+	req, err := request(ctx, u, token, true, c.needsDailyTrend30d())
 	if err != nil {
 		return false, false
 	}
@@ -413,15 +446,23 @@ func (c *Client) applyEvent(kind, data string) {
 	switch kind {
 	case "status_snapshot":
 		if json.Unmarshal([]byte(data), &dto) == nil {
+			next := dto.state()
+			receivedTrend := next.Trend30d
 			c.update(func(s *widgetvm.State) {
 				expanded := s.Expanded
 				anchorCorner := s.AnchorCorner
-				*s = dto.state()
+				if next.Trend30d == nil {
+					next.Trend30d = s.Trend30d
+				}
+				*s = next
 				s.Expanded = expanded
 				s.AnchorCorner = anchorCorner
 				s.Status = widgetvm.Online
 				s.ErrorText = ""
 			})
+			if trendIsCurrent(receivedTrend, c.clock.Now()) {
+				_ = c.trendStore.SaveTrend30d(receivedTrend)
+			}
 		}
 	case "status_quota":
 		var x struct {
@@ -479,6 +520,30 @@ func datePart(s string) string {
 	}
 	return s
 }
+
+var dailyTrendLocation = func() *time.Location {
+	location, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		return time.FixedZone("CST", 8*60*60)
+	}
+	return location
+}()
+
+func expectedTrendEndDate(now time.Time) string {
+	return now.In(dailyTrendLocation).AddDate(0, 0, -1).Format("2006-01-02")
+}
+
+func trendIsCurrent(trend *widgetvm.Trend30d, now time.Time) bool {
+	return trend != nil && trend.EndDate == expectedTrendEndDate(now)
+}
+
+func (c *Client) needsDailyTrend30d() bool {
+	c.mu.Lock()
+	trend := c.state.Trend30d
+	c.mu.Unlock()
+	return !trendIsCurrent(trend, c.clock.Now())
+}
+
 func (c *Client) invalid(text string) { c.setStatus(widgetvm.Invalid, text) }
 func (c *Client) connectionUnavailable() {
 	c.mu.Lock()

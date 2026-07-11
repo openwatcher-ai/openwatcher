@@ -500,6 +500,8 @@ func (a *App) handleStatusStreamWithOptions(w http.ResponseWriter, r *http.Reque
 	current := a.buildStatusResponse(options)
 	fingerprints := statusResponseFingerprints(current)
 	writeStatusSnapshotEvent(w, flusher, current)
+	pollOptions := options
+	pollOptions.IncludeDailyTrend30d = false
 
 	pollInterval := a.statusStreamPollInterval
 	if pollInterval <= 0 {
@@ -519,7 +521,7 @@ func (a *App) handleStatusStreamWithOptions(w http.ResponseWriter, r *http.Reque
 		case <-r.Context().Done():
 			return
 		case <-pollTicker.C:
-			next := a.buildStatusResponse(options)
+			next := a.buildStatusResponse(pollOptions)
 			nextFingerprints := statusResponseFingerprints(next)
 			if nextFingerprints.Quota != fingerprints.Quota {
 				writeStatusQuotaEvent(w, flusher, next)

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 )
 
 const (
@@ -36,7 +37,24 @@ type appServerRPCClient struct {
 	stdin  io.WriteCloser
 	enc    *json.Encoder
 	dec    *json.Decoder
-	stderr strings.Builder
+	stderr synchronizedBuilder
+}
+
+type synchronizedBuilder struct {
+	mu      sync.Mutex
+	builder strings.Builder
+}
+
+func (b *synchronizedBuilder) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.builder.Write(data)
+}
+
+func (b *synchronizedBuilder) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.builder.String()
 }
 
 type jsonRPCMessage struct {
