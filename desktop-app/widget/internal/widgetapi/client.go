@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"io"
+	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,163 +19,439 @@ import (
 
 var ErrCredentialMissing = errors.New("widget credential is not configured")
 
-const DefaultEndpoint = "http://127.0.0.1:8787"
+const maxBody = 2 << 20
+
+type Clock interface {
+	Now() time.Time
+	After(time.Duration) <-chan time.Time
+}
+type realClock struct{}
+
+func (realClock) Now() time.Time                         { return time.Now() }
+func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 type Client struct {
-	endpoint    string
-	tokenSource TokenSource
-	http        *http.Client
-	mu          sync.Mutex
-	state       widgetvm.State
-	emit        func(widgetvm.State)
-	lastEvent   time.Time
+	endpoint                 string
+	tokenSource              TokenSource
+	snapshotHTTP, streamHTTP *http.Client
+	clock                    Clock
+	mu                       sync.Mutex
+	state                    widgetvm.State
+	emit                     func(widgetvm.State)
+	refresh                  chan struct{}
+	activeCancel             context.CancelFunc
+	lastActivity             time.Time
 }
 
 func NewClient(endpoint string, source TokenSource) *Client {
+	return NewClientWithClock(endpoint, source, realClock{})
+}
+func NewClientWithClock(endpoint string, source TokenSource, clock Clock) *Client {
 	if source == nil {
 		source = NoTokenSource{}
 	}
-	return &Client{endpoint: endpoint, tokenSource: source, http: &http.Client{Timeout: 12 * time.Second}, state: widgetvm.InitialState()}
+	if clock == nil {
+		clock = realClock{}
+	}
+	return &Client{
+		endpoint:    endpoint,
+		tokenSource: source,
+		snapshotHTTP: &http.Client{
+			Timeout:   12 * time.Second,
+			Transport: loopbackTransport(),
+		},
+		streamHTTP: &http.Client{Transport: loopbackTransport()},
+		clock:      clock,
+		state:      widgetvm.InitialState(),
+		refresh:    make(chan struct{}, 1),
+	}
 }
+
+func loopbackTransport() *http.Transport {
+	dialer := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
+	return &http.Transport{
+		Proxy:                  nil,
+		DialContext:            dialer.DialContext,
+		ForceAttemptHTTP2:      false,
+		MaxIdleConns:           2,
+		MaxIdleConnsPerHost:    2,
+		IdleConnTimeout:        30 * time.Second,
+		ResponseHeaderTimeout:  12 * time.Second,
+		MaxResponseHeaderBytes: 64 << 10,
+	}
+}
+func ValidEndpoint(endpoint string) bool {
+	if endpoint == "" {
+		return true
+	}
+	_, err := validatedURL(endpoint, "/api/status")
+	return err == nil
+}
+
+// Run owns the sole HTTP/SSE loop. Every reconnect begins with a full GET.
 func (c *Client) Run(ctx context.Context, emit func(widgetvm.State)) {
 	c.mu.Lock()
 	c.emit = emit
 	c.mu.Unlock()
-	c.Refresh(ctx)
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	backoff := time.Second
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		case <-ticker.C:
-			c.checkStale()
 		}
+		token, err := c.tokenSource.Token()
+		if err != nil {
+			c.invalid("悬浮球凭据未配置")
+			if !c.retryWait(ctx, backoff) {
+				return
+			}
+			backoff = nextBackoff(backoff)
+			continue
+		}
+		snapshot, code, err := c.fetch(ctx, token)
+		if err != nil {
+			if code == http.StatusUnauthorized {
+				c.invalid("悬浮球凭据已失效")
+			} else {
+				c.connectionUnavailable()
+			}
+			if !c.retryWait(ctx, backoff) {
+				return
+			}
+			backoff = nextBackoff(backoff)
+			continue
+		}
+		c.update(func(s *widgetvm.State) {
+			expanded := s.Expanded
+			anchorCorner := s.AnchorCorner
+			*s = snapshot
+			s.Expanded = expanded
+			s.AnchorCorner = anchorCorner
+			s.Status = widgetvm.Online
+			s.ErrorText = ""
+		})
+		c.markActivity()
+		backoff = time.Second
+		manual, auth := c.stream(ctx, token)
+		if auth {
+			c.invalid("悬浮球凭据已失效")
+			if !c.retryWait(ctx, backoff) {
+				return
+			}
+			backoff = nextBackoff(backoff)
+			continue
+		}
+		if manual {
+			backoff = time.Second
+			continue
+		}
+		c.connectionUnavailable()
+		if !c.retryWait(ctx, backoff) {
+			return
+		}
+		backoff = nextBackoff(backoff)
 	}
 }
-func (c *Client) Refresh(ctx context.Context) {
-	c.update(func(s *widgetvm.State) { s.Status = widgetvm.Loading })
-	token, err := c.tokenSource.Token()
-	if err != nil {
-		c.update(func(s *widgetvm.State) { s.Status = widgetvm.Invalid; s.ErrorText = "悬浮球凭据未配置" })
-		return
+
+// Refresh cancels the active stream and asks the owner loop for a complete snapshot.
+func (c *Client) Refresh() {
+	c.mu.Lock()
+	if c.activeCancel != nil {
+		c.activeCancel()
 	}
-	snapshot, err := c.fetch(ctx, token)
-	if err != nil {
-		c.update(func(s *widgetvm.State) { s.Status = widgetvm.Offline; s.ErrorText = err.Error() })
-		return
+	c.mu.Unlock()
+	select {
+	case c.refresh <- struct{}{}:
+	default:
 	}
-	c.update(func(s *widgetvm.State) { *s = snapshot; s.Status = widgetvm.Online })
-	go c.stream(ctx, token)
 }
-func (c *Client) fetch(ctx context.Context, token string) (widgetvm.State, error) {
+func (c *Client) wait(ctx context.Context, d time.Duration) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-c.refresh:
+		return true
+	case <-c.clock.After(d):
+		return true
+	}
+}
+func (c *Client) retryWait(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return c.wait(ctx, 0)
+	}
+	// A small random spread prevents multiple helpers from reconnecting in the
+	// same instant after a service restart while preserving the documented cap.
+	return c.wait(ctx, retryDelay(d))
+}
+func retryDelay(d time.Duration) time.Duration {
+	factor := 0.85 + rand.Float64()*0.15
+	return time.Duration(float64(d) * factor)
+}
+func nextBackoff(d time.Duration) time.Duration {
+	switch d {
+	case time.Second:
+		return 2 * time.Second
+	case 2 * time.Second:
+		return 5 * time.Second
+	case 5 * time.Second:
+		return 10 * time.Second
+	default:
+		return 30 * time.Second
+	}
+}
+func (c *Client) fetch(ctx context.Context, token string) (widgetvm.State, int, error) {
 	u, err := validatedURL(c.endpoint, "/api/status")
 	if err != nil {
-		return widgetvm.State{}, err
+		return widgetvm.State{}, 0, err
 	}
+	req, err := request(ctx, u, token, false)
+	if err != nil {
+		return widgetvm.State{}, 0, err
+	}
+	res, err := c.snapshotHTTP.Do(req)
+	if err != nil {
+		return widgetvm.State{}, 0, errors.New("服务连接失败")
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return widgetvm.State{}, res.StatusCode, errors.New("服务暂不可用")
+	}
+	var dto response
+	if err := json.NewDecoder(io.LimitReader(res.Body, maxBody)).Decode(&dto); err != nil {
+		return widgetvm.State{}, res.StatusCode, errors.New("状态数据无法解析")
+	}
+	return dto.state(), res.StatusCode, nil
+}
+func request(ctx context.Context, u *url.URL, token string, stream bool) (*http.Request, error) {
 	q := u.Query()
 	q.Set("includeDailyTrend30d", "1")
 	q.Set("includeSessions", "0")
 	u.RawQuery = q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return widgetvm.State{}, err
+	if err == nil {
+		req.Header.Set("X-OpenWatcher-Token", token)
+		if stream {
+			req.Header.Set("Accept", "text/event-stream")
+		}
 	}
-	req.Header.Set("X-OpenWatcher-Token", token)
-	res, err := c.http.Do(req)
-	if err != nil {
-		return widgetvm.State{}, fmt.Errorf("服务连接失败")
-	}
-	defer res.Body.Close()
-	if res.StatusCode == 401 {
-		return widgetvm.State{Status: widgetvm.Invalid}, errors.New("悬浮球凭据已失效")
-	}
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return widgetvm.State{}, fmt.Errorf("服务暂不可用（HTTP %d）", res.StatusCode)
-	}
-	var dto response
-	if err = json.NewDecoder(res.Body).Decode(&dto); err != nil {
-		return widgetvm.State{}, errors.New("状态数据无法解析")
-	}
-	return dto.state(), nil
+	return req, err
 }
-func (c *Client) stream(ctx context.Context, token string) {
+
+// stream has no Client.Timeout. Freshness is driven by received SSE frames, including heartbeat.
+func (c *Client) stream(parent context.Context, token string) (manual, auth bool) {
+	ctx, cancel := context.WithCancel(parent)
 	c.mu.Lock()
-	c.lastEvent = time.Now()
+	c.activeCancel = cancel
 	c.mu.Unlock()
+	defer func() {
+		cancel()
+		c.mu.Lock()
+		if c.activeCancel != nil {
+			c.activeCancel = nil
+		}
+		c.mu.Unlock()
+	}()
 	u, err := validatedURL(c.endpoint, "/api/status/stream")
 	if err != nil {
-		return
+		return false, false
 	}
-	q := u.Query()
-	q.Set("includeDailyTrend30d", "1")
-	q.Set("includeSessions", "0")
-	u.RawQuery = q.Encode()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("X-OpenWatcher-Token", token)
-	res, err := c.http.Do(req)
+	req, err := request(ctx, u, token, true)
 	if err != nil {
-		c.update(func(s *widgetvm.State) { s.Status = widgetvm.Reconnecting })
-		return
+		return false, false
 	}
-	defer res.Body.Close()
-	if res.StatusCode == 401 {
-		c.update(func(s *widgetvm.State) { s.Status = widgetvm.Invalid; s.ErrorText = "悬浮球凭据已失效" })
-		return
+	res, err := c.streamHTTP.Do(req)
+	if err != nil {
+		return c.wasManual(), false
+	}
+	if res.StatusCode == http.StatusUnauthorized {
+		res.Body.Close()
+		return false, true
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		c.update(func(s *widgetvm.State) { s.Status = widgetvm.Reconnecting })
-		return
+		res.Body.Close()
+		return c.wasManual(), false
 	}
-	var event, data string
-	scanner := bufio.NewScanner(res.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
+	defer res.Body.Close()
+	events := make(chan sseEvent, 8)
+	done := make(chan error, 1)
+	go func() { done <- scanSSE(ctx, res.Body, events) }()
+	tick := c.clock.After(time.Second)
+	for {
+		select {
+		case <-parent.Done():
+			return false, false
+		case <-c.refresh:
+			return true, false
+		case ev, ok := <-events:
+			if !ok {
+				return c.wasManual(), false
+			}
+			c.applyEvent(ev.kind, ev.data)
+			tick = c.clock.After(time.Second)
+		case <-done:
+			return c.wasManual(), false
+		case <-tick:
+			age := c.age()
+			if age >= 60*time.Second {
+				c.setStatus(widgetvm.Stale, "数据可能已过期")
+				cancel()
+				return false, false
+			}
+			if age >= 30*time.Second {
+				c.setStatus(widgetvm.Reconnecting, "正在重连")
+				cancel()
+				return false, false
+			}
+			tick = c.clock.After(time.Second)
+		}
+	}
+}
+
+type sseEvent struct{ kind, data string }
+
+func scanSSE(ctx context.Context, r io.Reader, out chan<- sseEvent) error {
+	defer close(out)
+	s := bufio.NewScanner(r)
+	s.Buffer(make([]byte, 4096), maxBody)
+	var kind string
+	var data []string
+	var eventBytes int
+	send := func() error {
+		event := sseEvent{kind, strings.Join(data, "\n")}
+		select {
+		case out <- event:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	for s.Scan() {
+		line := s.Text()
 		switch {
 		case strings.HasPrefix(line, "event:"):
-			event = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			kind = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
 		case strings.HasPrefix(line, "data:"):
-			data = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			part := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			eventBytes += len(part)
+			if eventBytes > maxBody {
+				return errors.New("SSE event exceeds size limit")
+			}
+			data = append(data, part)
 		case line == "":
-			c.applyEvent(event, data)
-			event = ""
-			data = ""
+			if kind != "" || len(data) > 0 {
+				if err := send(); err != nil {
+					return err
+				}
+			}
+			kind = ""
+			data = nil
+			eventBytes = 0
 		}
 	}
-	c.update(func(s *widgetvm.State) {
-		if s.Status != widgetvm.Invalid {
-			s.Status = widgetvm.Reconnecting
+	if kind != "" || len(data) > 0 {
+		if err := send(); err != nil {
+			return err
 		}
-	})
+	}
+	return s.Err()
+}
+func (c *Client) wasManual() bool {
+	select {
+	case <-c.refresh:
+		return true
+	default:
+		return false
+	}
+}
+func (c *Client) age() time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.lastActivity.IsZero() {
+		return 0
+	}
+	return c.clock.Now().Sub(c.lastActivity)
+}
+
+func (c *Client) markActivity() {
+	c.mu.Lock()
+	c.lastActivity = c.clock.Now()
+	c.mu.Unlock()
+}
+
+// checkStale is kept small and deterministic for timer-driven tests. The active
+// stream loop calls the same thresholds before cancelling and reconnecting.
+func (c *Client) checkStale() {
+	age := c.age()
+	if age >= 60*time.Second {
+		c.setStatus(widgetvm.Stale, "数据可能已过期")
+	} else if age >= 30*time.Second {
+		c.setStatus(widgetvm.Reconnecting, "正在重连")
+	}
 }
 func (c *Client) applyEvent(kind, data string) {
 	c.mu.Lock()
-	c.lastEvent = time.Now()
+	previousObservedAt := c.state.ObservedAt
 	c.mu.Unlock()
+	c.markActivity()
+	var envelope struct {
+		ObservedAt string `json:"observedAt"`
+		CreatedAt  string `json:"createdAt"`
+	}
+	_ = json.Unmarshal([]byte(data), &envelope)
+	eventTime := envelope.ObservedAt
+	if eventTime == "" {
+		eventTime = envelope.CreatedAt
+	}
 	if kind == "heartbeat" {
+		c.update(func(s *widgetvm.State) {
+			s.Status = widgetvm.Online
+			s.ErrorText = ""
+		})
+		if crossesDate(previousObservedAt, eventTime) {
+			c.Refresh()
+		}
 		return
 	}
 	var dto response
 	switch kind {
 	case "status_snapshot":
 		if json.Unmarshal([]byte(data), &dto) == nil {
-			c.update(func(s *widgetvm.State) { *s = dto.state(); s.Status = widgetvm.Online })
+			c.update(func(s *widgetvm.State) {
+				expanded := s.Expanded
+				anchorCorner := s.AnchorCorner
+				*s = dto.state()
+				s.Expanded = expanded
+				s.AnchorCorner = anchorCorner
+				s.Status = widgetvm.Online
+				s.ErrorText = ""
+			})
 		}
 	case "status_quota":
 		var x struct {
 			Quota *quotaDTO `json:"quota"`
 		}
 		if json.Unmarshal([]byte(data), &x) == nil {
-			c.update(func(s *widgetvm.State) { s.Quota = x.Quota.vm() })
+			c.update(func(s *widgetvm.State) {
+				s.Quota = x.Quota.vm()
+				s.ObservedAt = envelope.ObservedAt
+				s.Status = widgetvm.Online
+				s.ErrorText = ""
+			})
 		}
 	case "status_heatmap24h":
-		var x response
-		if json.Unmarshal([]byte(data), &x) == nil {
+		if json.Unmarshal([]byte(data), &dto) == nil {
 			c.update(func(s *widgetvm.State) {
-				s.Heatmap24h = x.Heatmap24h.vm()
-				s.Heatmap7d = x.Heatmap7d.vm()
-				s.Today = x.DailyUsage.today()
+				if dto.Heatmap24h != nil {
+					s.Heatmap24h = dto.Heatmap24h.vm()
+				}
+				if dto.Heatmap7d != nil {
+					s.Heatmap7d = dto.Heatmap7d.vm()
+				}
+				if dto.DailyUsage != nil {
+					s.Today = dto.DailyUsage.today()
+				}
+				s.ObservedAt = envelope.ObservedAt
+				s.Status = widgetvm.Online
+				s.ErrorText = ""
 			})
 		}
 	case "status_errors":
@@ -181,27 +459,59 @@ func (c *Client) applyEvent(kind, data string) {
 			Errors []string `json:"errors"`
 		}
 		if json.Unmarshal([]byte(data), &x) == nil {
-			c.update(func(s *widgetvm.State) { s.Errors = x.Errors })
+			c.update(func(s *widgetvm.State) {
+				s.Errors = x.Errors
+				s.ObservedAt = envelope.ObservedAt
+				s.Status = widgetvm.Online
+				s.ErrorText = ""
+			})
 		}
 	}
+	// API timezone day changes are a snapshot boundary. Do not synthesize trend data from SSE.
+	if crossesDate(previousObservedAt, eventTime) {
+		c.Refresh()
+	}
 }
-func (c *Client) checkStale() {
+func crossesDate(previous, next string) bool {
+	return datePart(previous) != "" && datePart(next) != "" && datePart(previous) != datePart(next)
+}
+func datePart(s string) string {
+	if len(s) >= 10 {
+		return s[:10]
+	}
+	return s
+}
+func (c *Client) invalid(text string) { c.setStatus(widgetvm.Invalid, text) }
+func (c *Client) connectionUnavailable() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.lastEvent.IsZero() {
-		return
+	hasData := !c.lastActivity.IsZero()
+	age := time.Duration(0)
+	if hasData {
+		age = c.clock.Now().Sub(c.lastActivity)
 	}
-	age := time.Since(c.lastEvent)
-	if age > 60*time.Second {
-		c.state.Status = widgetvm.Stale
-	} else if age > 30*time.Second && c.state.Status == widgetvm.Online {
-		c.state.Status = widgetvm.Reconnecting
-	} else {
-		return
+	c.mu.Unlock()
+	switch {
+	case hasData && age >= 60*time.Second:
+		c.setStatus(widgetvm.Stale, "数据可能已过期")
+	case hasData:
+		c.setStatus(widgetvm.Reconnecting, "正在重连")
+	default:
+		c.setStatus(widgetvm.Offline, "本机服务未运行")
 	}
-	if c.emit != nil {
-		c.emit(c.state)
+}
+func classifyHTTPStatus(code int) widgetvm.ConnectionStatus {
+	if code == http.StatusUnauthorized {
+		return widgetvm.Invalid
 	}
+	return widgetvm.Offline
+}
+func (c *Client) setStatus(status widgetvm.ConnectionStatus, text string) {
+	c.update(func(s *widgetvm.State) {
+		if s.Status != widgetvm.Invalid || status == widgetvm.Invalid {
+			s.Status = status
+			s.ErrorText = text
+		}
+	})
 }
 func (c *Client) update(fn func(*widgetvm.State)) {
 	c.mu.Lock()
@@ -214,10 +524,18 @@ func (c *Client) update(fn func(*widgetvm.State)) {
 	}
 }
 func validatedURL(base, path string) (*url.URL, error) {
-	u, err := url.Parse(strings.TrimRight(base, "/") + path)
-	if err != nil || u.Scheme != "http" && u.Scheme != "https" || u.Hostname() == "" {
+	if base == "" {
+		return nil, errors.New("服务地址未配置")
+	}
+	u, err := url.Parse(base)
+	if err != nil || u.Scheme != "http" || u.User != nil || u.Fragment != "" || u.RawQuery != "" || u.Hostname() == "" || (u.Path != "" && u.Path != "/") {
 		return nil, errors.New("服务地址无效")
 	}
+	ip := net.ParseIP(u.Hostname())
+	if ip == nil || !ip.IsLoopback() {
+		return nil, errors.New("服务地址无效")
+	}
+	u.Path = path
 	return u, nil
 }
 
@@ -266,20 +584,24 @@ type heatmap24DTO struct {
 	Buckets  []bucketDTO `json:"buckets"`
 }
 type bucketDTO struct {
-	HourStart                                                                        string `json:"hourStart"`
-	InputTokens, CachedInputTokens, OutputTokens, ReasoningOutputTokens, TotalTokens int64
-	ActiveThreads                                                                    int `json:"activeThreads"`
+	HourStart             string `json:"hourStart"`
+	InputTokens           int64  `json:"inputTokens"`
+	CachedInputTokens     int64  `json:"cachedInputTokens"`
+	OutputTokens          int64  `json:"outputTokens"`
+	ReasoningOutputTokens int64  `json:"reasoningOutputTokens"`
+	TotalTokens           int64  `json:"totalTokens"`
+	ActiveThreads         int    `json:"activeThreads"`
 }
 
 func (h *heatmap24DTO) vm() *widgetvm.Heatmap24h {
 	if h == nil {
 		return nil
 	}
-	out := &widgetvm.Heatmap24h{Timezone: h.Timezone}
+	o := &widgetvm.Heatmap24h{Timezone: h.Timezone}
 	for _, b := range h.Buckets {
-		out.Buckets = append(out.Buckets, widgetvm.Bucket{HourStart: b.HourStart, InputTokens: b.InputTokens, CachedInputTokens: b.CachedInputTokens, OutputTokens: b.OutputTokens, ReasoningOutputTokens: b.ReasoningOutputTokens, TotalTokens: b.TotalTokens, ActiveThreads: b.ActiveThreads})
+		o.Buckets = append(o.Buckets, widgetvm.Bucket{HourStart: b.HourStart, InputTokens: b.InputTokens, CachedInputTokens: b.CachedInputTokens, OutputTokens: b.OutputTokens, ReasoningOutputTokens: b.ReasoningOutputTokens, TotalTokens: b.TotalTokens, ActiveThreads: b.ActiveThreads})
 	}
-	return out
+	return o
 }
 func (h *heatmap24DTO) timezone() string {
 	if h == nil {
@@ -289,14 +611,16 @@ func (h *heatmap24DTO) timezone() string {
 }
 
 type heatmap7DTO struct {
-	Timezone, StartDate, EndDate string
-	PeakTokens                   int64
-	Days                         []heatmapDayDTO
+	Timezone   string          `json:"timezone"`
+	StartDate  string          `json:"startDate"`
+	EndDate    string          `json:"endDate"`
+	PeakTokens int64           `json:"peakTokens"`
+	Days       []heatmapDayDTO `json:"days"`
 }
 type heatmapDayDTO struct {
-	Date        string
-	TotalTokens int64
-	Hours       []int64
+	Date        string  `json:"date"`
+	TotalTokens int64   `json:"totalTokens"`
+	Hours       []int64 `json:"hours"`
 }
 
 func (h *heatmap7DTO) vm() *widgetvm.Heatmap7d {
@@ -311,8 +635,12 @@ func (h *heatmap7DTO) vm() *widgetvm.Heatmap7d {
 }
 
 type dailyDTO struct {
-	InputTokens, CachedInputTokens, OutputTokens, ReasoningOutputTokens, TotalTokens int64
-	EstimatedValueLabel                                                              string `json:"estimatedValueLabel"`
+	InputTokens           int64  `json:"inputTokens"`
+	CachedInputTokens     int64  `json:"cachedInputTokens"`
+	OutputTokens          int64  `json:"outputTokens"`
+	ReasoningOutputTokens int64  `json:"reasoningOutputTokens"`
+	TotalTokens           int64  `json:"totalTokens"`
+	EstimatedValueLabel   string `json:"estimatedValueLabel"`
 }
 
 func (d *dailyDTO) today() *widgetvm.Today {
@@ -323,14 +651,18 @@ func (d *dailyDTO) today() *widgetvm.Today {
 }
 
 type trendDTO struct {
-	Timezone, StartDate, EndDate           string
-	TotalTokens, AverageTokens, PeakTokens int64
-	EstimatedValueLabel                    string `json:"estimatedValueLabel"`
-	Days                                   []trendDayDTO
+	Timezone            string        `json:"timezone"`
+	StartDate           string        `json:"startDate"`
+	EndDate             string        `json:"endDate"`
+	TotalTokens         int64         `json:"totalTokens"`
+	AverageTokens       int64         `json:"averageTokens"`
+	PeakTokens          int64         `json:"peakTokens"`
+	EstimatedValueLabel string        `json:"estimatedValueLabel"`
+	Days                []trendDayDTO `json:"days"`
 }
 type trendDayDTO struct {
-	Date        string
-	TotalTokens int64
+	Date        string `json:"date"`
+	TotalTokens int64  `json:"totalTokens"`
 }
 
 func (t *trendDTO) vm() *widgetvm.Trend30d {
