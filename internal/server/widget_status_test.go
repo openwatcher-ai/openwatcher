@@ -97,11 +97,15 @@ func TestStatusStreamOmitsSessionsForInitialSnapshot(t *testing.T) {
 	if got := source.trendRequests.Load(); got != 1 {
 		t.Fatalf("daily trend was recomputed after initial stream snapshot: %d", got)
 	}
+	if got := source.skipSessionRequests.Load(); got == 0 {
+		t.Fatal("session scanner was not told to skip conversation details")
+	}
 }
 
 type trendCountingSessions struct {
 	*mutableSessions
-	trendRequests atomic.Int32
+	trendRequests       atomic.Int32
+	skipSessionRequests atomic.Int32
 }
 
 func newTrendCountingSessions(snapshot sessions.Snapshot) *trendCountingSessions {
@@ -111,6 +115,9 @@ func newTrendCountingSessions(snapshot sessions.Snapshot) *trendCountingSessions
 func (s *trendCountingSessions) SnapshotWithOptions(options sessions.SnapshotOptions) (sessions.Snapshot, error) {
 	if options.IncludeDailyTrend30d {
 		s.trendRequests.Add(1)
+	}
+	if options.SkipSessions {
+		s.skipSessionRequests.Add(1)
 	}
 	return s.mutableSessions.SnapshotWithOptions(options)
 }

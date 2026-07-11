@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"openwatcher/internal/config"
@@ -27,6 +28,9 @@ type Scanner struct {
 	CodexHome          string
 	Limit              int
 	resolveThreadNames threadNameResolverFunc
+	snapshotMu         sync.Mutex
+	heatmap7dCachedAt  time.Time
+	heatmap7dCache     Heatmap7dSnapshot
 }
 
 type Snapshot struct {
@@ -39,6 +43,7 @@ type Snapshot struct {
 
 type SnapshotOptions struct {
 	IncludeDailyTrend30d bool
+	SkipSessions         bool
 }
 
 type SessionSnapshot struct {
@@ -206,6 +211,9 @@ func (s *Scanner) SnapshotAt(now time.Time) (Snapshot, error) {
 }
 
 func (s *Scanner) SnapshotAtWithOptions(now time.Time, options SnapshotOptions) (Snapshot, error) {
+	s.snapshotMu.Lock()
+	defer s.snapshotMu.Unlock()
+
 	codexHome, err := config.ResolveCodexHome(s.CodexHome)
 	if err != nil {
 		return Snapshot{}, err
@@ -233,8 +241,10 @@ func (s *Scanner) SnapshotAtWithOptions(now time.Time, options SnapshotOptions) 
 	if err != nil {
 		return Snapshot{}, err
 	}
-	if err := s.applyResolvedThreadNames(codexHome, activeThreads); err != nil {
-		log.Printf("sessions: thread name resolver failed: %v", err)
+	if !options.SkipSessions {
+		if err := s.applyResolvedThreadNames(codexHome, activeThreads); err != nil {
+			log.Printf("sessions: thread name resolver failed: %v", err)
+		}
 	}
 
 	recentRollouts, err := loadRecentRollouts(db, heatmapWindowStart)
@@ -267,17 +277,21 @@ func (s *Scanner) SnapshotAtWithOptions(now time.Time, options SnapshotOptions) 
 	}
 	refreshMetricsCache(cachePath, &cache, recentRollouts, activeThreads, heatmapWindowStart, heatmapNow)
 
-	thresholds := loadModelCompactThresholds(codexHome)
-	compactions := loadContextCompactionStates(now)
-
-	sessionSnapshots := buildSessionSnapshots(activeThreads, cache.ThreadContexts, thresholds, compactions, now)
-	if len(sessionSnapshots) > displayLimit {
-		sessionSnapshots = sessionSnapshots[:displayLimit]
+	var sessionSnapshots []SessionSnapshot
+	if !options.SkipSessions {
+		thresholds := loadModelCompactThresholds(codexHome)
+		compactions := loadContextCompactionStates(now)
+		sessionSnapshots = buildSessionSnapshots(activeThreads, cache.ThreadContexts, thresholds, compactions, now)
+		if len(sessionSnapshots) > displayLimit {
+			sessionSnapshots = sessionSnapshots[:displayLimit]
+		}
 	}
+	heatmap24h := buildHeatmapSnapshot(cache, heatmapNow)
+	heatmap7d := s.buildCachedHeatmap7dSnapshot(weeklyHeatmapRollouts, heatmapNow, heatmap24h)
 
 	return Snapshot{
-		Heatmap24h:    buildHeatmapSnapshot(cache, heatmapNow),
-		Heatmap7d:     buildHeatmap7dSnapshot(weeklyHeatmapRollouts, heatmapNow),
+		Heatmap24h:    heatmap24h,
+		Heatmap7d:     heatmap7d,
 		DailyUsage:    buildDailyTokenUsage(cache, heatmapNow),
 		DailyTrend30d: dailyTrend30d,
 		Sessions:      sessionSnapshots,
