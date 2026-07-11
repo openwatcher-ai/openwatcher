@@ -35,13 +35,14 @@ var (
 	credFree   = advapi32.NewProc("CredFree")
 )
 
-type systemStore struct{}
+type systemStore struct{ targetName string }
 
-func NewSystemStore() SecretStore { return systemStore{} }
-func target() *uint16             { return windows.StringToUTF16Ptr("ai.openwatcher.widget/token") }
-func (systemStore) Read() (string, error) {
+func NewSystemStore() SecretStore                  { return systemStore{targetName: widgetCredentialWindowsTarget} }
+func newSystemStore(targetName string) systemStore { return systemStore{targetName: targetName} }
+func (s systemStore) target() *uint16              { return windows.StringToUTF16Ptr(s.targetName) }
+func (s systemStore) Read() (string, error) {
 	var c *credential
-	targetName := target()
+	targetName := s.target()
 	r, _, e := credRead.Call(uintptr(unsafe.Pointer(targetName)), credTypeGeneric, 0, uintptr(unsafe.Pointer(&c)))
 	runtime.KeepAlive(targetName)
 	if r == 0 {
@@ -58,12 +59,12 @@ func (systemStore) Read() (string, error) {
 	runtime.KeepAlive(c)
 	return value, nil
 }
-func (systemStore) Write(v string) error {
+func (s systemStore) Write(v string) error {
 	if err := ValidateToken(v); err != nil {
 		return err
 	}
 	b := []byte(v)
-	targetName := target()
+	targetName := s.target()
 	c := credential{Type: credTypeGeneric, TargetName: targetName, CredentialBlobSize: uint32(len(b)), Persist: 2}
 	if len(b) > 0 {
 		c.CredentialBlob = &b[0]
@@ -77,8 +78,8 @@ func (systemStore) Write(v string) error {
 	}
 	return nil
 }
-func (systemStore) Delete() error {
-	targetName := target()
+func (s systemStore) Delete() error {
+	targetName := s.target()
 	r, _, e := credDelete.Call(uintptr(unsafe.Pointer(targetName)), credTypeGeneric, 0)
 	runtime.KeepAlive(targetName)
 	if r == 0 && e != windows.ERROR_NOT_FOUND {

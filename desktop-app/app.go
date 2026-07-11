@@ -320,14 +320,14 @@ func (a *App) GetFloatingWidgetStatus() widget.Status {
 	if err == nil {
 		status.Enabled = loaded.FloatingWidgetEnabled
 	}
-	if !status.Enabled {
-		return status
-	}
 	a.widgetStateMu.Lock()
 	setupError := a.widgetSetupError
 	a.widgetStateMu.Unlock()
 	if setupError != "" {
 		status.Message = setupError
+		return status
+	}
+	if !status.Enabled {
 		return status
 	}
 	if a.backendManager == nil || !a.backendManager.DesktopStatus().Running {

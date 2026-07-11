@@ -100,6 +100,8 @@ const mockSnapshot = {
   }
 }
 
+let mockFloatingWidgetEnabled = true
+
 const mockInstallerState = {
   adb: {
     available: true,
@@ -195,6 +197,7 @@ const mockDeveloperSnapshot = {
 const fallbackHandlers = {
   GetDesktopSettings: async () => ({
     autoStartBackend: true,
+    floatingWidgetEnabled: mockFloatingWidgetEnabled,
     developerEnvironment: {
       enabled: false,
       mode: "workspace",
@@ -319,6 +322,25 @@ const fallbackHandlers = {
   CopyDiagnostics: async () => "OpenWatcher mock diagnostics",
   ExportDiagnosticsBundle: async () => "/tmp/openwatcher-diagnostics.zip",
   SetAutoStartBackend: async (enabled) => ({ autoStartBackend: Boolean(enabled) }),
+  GetFloatingWidgetStatus: async () => ({
+    enabled: mockFloatingWidgetEnabled,
+    running: mockFloatingWidgetEnabled,
+    restartAttempts: 0,
+    message: ""
+  }),
+  SetFloatingWidgetEnabled: async (enabled) => {
+    mockFloatingWidgetEnabled = Boolean(enabled)
+    return {
+      autoStartBackend: true,
+      floatingWidgetEnabled: mockFloatingWidgetEnabled
+    }
+  },
+  RepairFloatingWidgetCredential: async () => ({
+    enabled: mockFloatingWidgetEnabled,
+    running: mockFloatingWidgetEnabled,
+    restartAttempts: 0,
+    message: ""
+  }),
   GetCodexHookStatus: async () => ({
     codexHome: "~/.codex",
     hooksPath: "~/.codex/hooks.json",

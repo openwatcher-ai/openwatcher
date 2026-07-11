@@ -1405,8 +1405,121 @@ export function createAppStore() {
   function applyDesktopSettings(desktopSettings) {
     const nextEnabled = desktopSettings?.autoStartBackend !== false
     state.settingsPreferences.autoStartBackend = nextEnabled
+    if (Object.prototype.hasOwnProperty.call(desktopSettings || {}, "floatingWidgetEnabled")) {
+      state.floatingWidget.enabled = Boolean(desktopSettings.floatingWidgetEnabled)
+    }
     persistSettingsPreferencesState()
     return nextEnabled
+  }
+
+  function applyFloatingWidgetStatus(status) {
+    const previous = state.floatingWidget
+    state.floatingWidget = {
+      enabled: typeof status?.enabled === "boolean" ? status.enabled : previous.enabled,
+      running: Boolean(status?.running),
+      restartAttempts: Math.max(0, Number(status?.restartAttempts || 0)),
+      message: String(status?.message || "").trim(),
+      busy: previous.busy,
+      repairing: previous.repairing,
+      refreshing: previous.refreshing,
+      checkedAt: previous.checkedAt
+    }
+    return state.floatingWidget
+  }
+
+  async function refreshFloatingWidgetStatus({ notify = false } = {}) {
+    state.floatingWidget.refreshing = true
+    try {
+      const status = applyFloatingWidgetStatus(await invoke("GetFloatingWidgetStatus"))
+      status.checkedAt = new Date().toISOString()
+      if (notify) {
+        showNotice("悬浮球状态已刷新。")
+      }
+      return status
+    } catch (error) {
+      state.floatingWidget.message = `读取悬浮球状态失败：${String(error)}`
+      if (notify) {
+        showNotice(state.floatingWidget.message)
+      }
+      return state.floatingWidget
+    } finally {
+      state.floatingWidget.refreshing = false
+    }
+  }
+
+  async function toggleFloatingWidgetAction() {
+    if (state.floatingWidget.busy || state.floatingWidget.repairing || state.floatingWidget.refreshing) {
+      return state.floatingWidget.enabled
+    }
+    const previous = state.floatingWidget.enabled
+    const enabled = !previous
+    state.floatingWidget.busy = true
+    try {
+      const saved = await invoke("SetFloatingWidgetEnabled", enabled)
+      applyDesktopSettings(saved)
+      await refreshFloatingWidgetStatus()
+      showNotice(enabled
+        ? "桌面悬浮球已开启；本机服务就绪后会自动显示。"
+        : "桌面悬浮球已关闭。")
+      return state.floatingWidget.enabled
+    } catch (error) {
+      state.floatingWidget.enabled = previous
+      await refreshFloatingWidgetStatus()
+      showNotice(`保存桌面悬浮球设置失败：${String(error)}`)
+      return previous
+    } finally {
+      state.floatingWidget.busy = false
+    }
+  }
+
+  async function repairFloatingWidgetCredentialAction() {
+    if (state.floatingWidget.busy || state.floatingWidget.repairing || state.floatingWidget.refreshing) {
+      return
+    }
+    state.floatingWidget.repairing = true
+    try {
+      applyFloatingWidgetStatus(await invoke("RepairFloatingWidgetCredential"))
+      state.floatingWidget.checkedAt = new Date().toISOString()
+      showNotice("悬浮球凭据已重新生成，本机服务会使用新凭据重新连接。")
+    } catch (error) {
+      await refreshFloatingWidgetStatus()
+      showNotice(`重新授权悬浮球失败：${String(error)}`)
+    } finally {
+      state.floatingWidget.repairing = false
+    }
+  }
+
+  function floatingWidgetStatusTone() {
+    if (state.floatingWidget.message && !state.floatingWidget.running) {
+      return "amber"
+    }
+    if (!state.floatingWidget.enabled) {
+      return "neutral"
+    }
+    return state.floatingWidget.running ? "ok" : "amber"
+  }
+
+  function floatingWidgetStatusLabel() {
+    if (!state.floatingWidget.enabled) {
+      return "已关闭"
+    }
+    if (state.floatingWidget.running) {
+      return "运行中"
+    }
+    return state.floatingWidget.restartAttempts >= 3 ? "已暂停重试" : "等待显示"
+  }
+
+  function floatingWidgetStatusDetail() {
+    if (state.floatingWidget.message) {
+      return state.floatingWidget.message
+    }
+    if (!state.floatingWidget.enabled) {
+      return "开启后会在桌面显示额度环，单击可展开完整用量面板。"
+    }
+    if (state.floatingWidget.running) {
+      return "悬浮球正在桌面显示，单击即可展开四象限用量面板。"
+    }
+    return "正在等待本机服务和悬浮球辅助程序就绪。"
   }
 
   function applyDeveloperDesktopSettings(desktopSettings) {
@@ -1447,6 +1560,7 @@ export function createAppStore() {
     } catch {
       return {
         autoStartBackend: state.settingsPreferences.autoStartBackend,
+        floatingWidgetEnabled: state.floatingWidget.enabled,
         developerEnvironment: {
           enabled: Boolean(state.developerForm.enabled),
           mode: state.developerForm.mode,
@@ -1647,6 +1761,7 @@ export function createAppStore() {
     state.backendLogs = await loadBackendLogs()
     state.installerState = await loadInstallerStatus()
     state.codexHookState = await loadCodexHookStatus()
+    await refreshFloatingWidgetStatus()
     await loadDeveloperEnvironmentSnapshot({ ensure: developerIsRunning() })
     syncWizardWithInstallerState()
     maybeShowTunnelExpiryNotice()
@@ -1664,6 +1779,7 @@ export function createAppStore() {
       hydrateStateFromSnapshot(state.snapshot)
       syncInstallWizardDraft(state.snapshot)
       state.backendLogs = await loadBackendLogs()
+      await refreshFloatingWidgetStatus()
       maybeShowTunnelExpiryNotice()
       if (backendStatus?.running) {
         if (notifySuccess) {
@@ -1691,6 +1807,7 @@ export function createAppStore() {
       hydrateStateFromSnapshot(state.snapshot)
       syncInstallWizardDraft(state.snapshot)
       state.backendLogs = await loadBackendLogs()
+      await refreshFloatingWidgetStatus()
       maybeShowTunnelExpiryNotice()
       showNotice("本机服务已重启。")
     } catch (error) {
@@ -1895,6 +2012,7 @@ export function createAppStore() {
       }
 
       const developerSnapshot = await loadDeveloperEnvironmentSnapshot({ ensure: developerIsRunning() })
+      await refreshFloatingWidgetStatus()
       const auxiliaryChecks = {}
       if (wizardConfigEntry("public")?.enabled && wizardConfigEntry("public").url.trim()) {
         const result = await invoke("CheckHealthWithRequest", buildBackendRequestForEntry("public"))
@@ -2905,6 +3023,7 @@ export function createAppStore() {
     state.settingsPreferences = loadSettingsPreferencesState()
     const desktopSettings = await loadDesktopSettings()
     applyDesktopSettings(desktopSettings)
+    await refreshFloatingWidgetStatus()
     const requestedPage = new URLSearchParams(window.location.search).get("page") || window.location.hash.replace(/^#/, "")
     if (navItems.some((item) => item.id === requestedPage)) {
       state.currentPage = requestedPage
@@ -2984,6 +3103,9 @@ export function createAppStore() {
       setTheme,
       toggleTheme,
       toggleSettingsPreference,
+      toggleFloatingWidgetAction,
+      refreshFloatingWidgetStatus,
+      repairFloatingWidgetCredentialAction,
       closeNotificationPanel,
       runGlobalHealthCheck,
       copyText,
@@ -3106,6 +3228,9 @@ export function createAppStore() {
       notificationLevelTone,
       pairingActionBusy,
       pairingActionLabel,
+      floatingWidgetStatusTone,
+      floatingWidgetStatusLabel,
+      floatingWidgetStatusDetail,
       formatTimeAgo
     }
   }

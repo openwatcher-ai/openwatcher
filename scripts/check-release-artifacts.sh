@@ -136,6 +136,18 @@ if [[ "$desktop_status" == "updated" ]]; then
     [[ -f "$SCAN_DIR/$artifact" ]] || die "Desktop 产物不存在：$artifact"
     [[ "$(sha256_file "$SCAN_DIR/$artifact")" == "$sha256" ]] || die "Desktop 平台 SHA256 与 release-manifest.json 不一致：$platform"
     [[ "$(file_size_bytes "$SCAN_DIR/$artifact")" == "$size_bytes" ]] || die "Desktop 平台 sizeBytes 与 release-manifest.json 不一致：$platform"
+    if [[ "$artifact" == *.zip ]]; then
+      case "$platform" in
+        darwin-*)
+          zipinfo -1 "$SCAN_DIR/$artifact" | rg -Fx 'OpenWatcher.app/Contents/Library/Helpers/OpenWatcher Widget.app/Contents/MacOS/openwatcher-widget' >/dev/null \
+            || die "macOS Desktop 压缩包缺少悬浮球辅助程序：$artifact"
+          ;;
+        windows-*)
+          zipinfo -1 "$SCAN_DIR/$artifact" | rg -Fx "bundled/widget/$platform/openwatcher-widget.exe" >/dev/null \
+            || die "Windows Desktop 压缩包缺少悬浮球辅助程序：$artifact"
+          ;;
+      esac
+    fi
   done < <(jq -r '.desktop.platforms | to_entries[] | [.key, .value.artifact, .value.sha256, (.value.sizeBytes | tostring)] | @tsv' "$MANIFEST_PATH")
 else
   jq -e '.desktop.sourceReleaseTag | strings | select(length > 0)' "$MANIFEST_PATH" >/dev/null 2>&1 || die "复用的 desktop 缺少 sourceReleaseTag"

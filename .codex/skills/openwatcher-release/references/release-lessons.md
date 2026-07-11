@@ -72,3 +72,8 @@
 
 - 重建公开仓后，仓库内 `watch-app/RELEASE_BUILDS.md` 可能仍带有旧私有构建记录；首版和后续发版都不能参考这类仓库内构建表决定版本号、组件复用或 changelog 历史。正式事实源必须是最新公开 GitHub Release 的 `release-manifest.json` 和 official 仓发布的 channel metadata。
 - 公开资产文件名不要同时塞入组件版本、release tag、commit 和构建时间；人读文件名只需要组件、版本和必要平台/架构，完整追溯事实应放在 `release-manifest.json`、组件 metadata、GitHub Release 和 `checksums.txt` 中。
+
+### 2026-07-11
+
+- Wails 在非目标系统交叉构建时会跳过平台 post-build hook；跨平台预检不能只看 `wails build` 成功，必须单独执行并验证资源同步程序，正式产物仍以对应原生 GitHub runner 的构建为准。
+- Desktop 引入嵌套 helper 后，存在性检查要同时进入打包脚本和最终 ZIP artifact gate；只检查主程序与 sidecar 会让“本地能编译、发布包漏 helper”悄悄通过。

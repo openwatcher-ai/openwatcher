@@ -113,6 +113,15 @@ const codexHookRows = computed(() => {
   ]
 })
 
+const floatingWidgetRows = computed(() => [
+  ["显示内容", "5h / 7d 额度环与四象限用量面板"],
+  ["数据来源", "OpenWatcher 本机接口（不读取会话详情）"],
+  ["状态更新", store.state.floatingWidget.checkedAt ? formatCheckedAt(store.state.floatingWidget.checkedAt) : "尚未刷新"],
+  ["异常恢复", store.state.floatingWidget.restartAttempts > 0
+    ? `近 5 分钟已自动重试 ${store.state.floatingWidget.restartAttempts} 次`
+    : "辅助程序异常退出后自动重试"]
+])
+
 function formatCheckedAt(raw) {
   if (!raw) {
     return ""
@@ -344,43 +353,88 @@ function formatCheckedAt(raw) {
     </section>
 
     <section v-else class="settings-grid">
-      <article v-if="store.state.settingsTab === 'general'" class="panel compact-panel">
-        <header class="panel-head"><h2>常规设置</h2></header>
-        <div class="toggle-list">
-          <button
-            v-for="row in generalToggleRows"
-            :key="row.key"
-            class="toggle-row"
-            type="button"
-            :aria-pressed="store.state.settingsPreferences[row.key]"
-            @click="store.actions.toggleSettingsPreference(row.key)"
-          >
-            <span>{{ row.label }}</span>
-            <span class="toggle" :class="{ 'is-on': store.state.settingsPreferences[row.key] }" aria-hidden="true"></span>
-          </button>
-        </div>
-        <div class="form-grid two">
-          <FieldRow label="语言"><input value="简体中文" readonly /></FieldRow>
-          <FieldRow label="主题">
-            <div class="theme-segmented" role="group" aria-label="主题">
+      <template v-if="store.state.settingsTab === 'general'">
+        <article class="panel compact-panel">
+          <header class="panel-head"><h2>常规设置</h2></header>
+          <div class="toggle-list">
+            <button
+              v-for="row in generalToggleRows"
+              :key="row.key"
+              class="toggle-row"
+              type="button"
+              :aria-pressed="store.state.settingsPreferences[row.key]"
+              @click="store.actions.toggleSettingsPreference(row.key)"
+            >
+              <span>{{ row.label }}</span>
+              <span class="toggle" :class="{ 'is-on': store.state.settingsPreferences[row.key] }" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="form-grid two">
+            <FieldRow label="语言"><input value="简体中文" readonly /></FieldRow>
+            <FieldRow label="主题">
+              <div class="theme-segmented" role="group" aria-label="主题">
+                <button
+                  type="button"
+                  :class="{ 'is-active': store.state.theme === 'dark' }"
+                  @click="store.actions.setTheme('dark')"
+                >
+                  深色（默认）
+                </button>
+                <button
+                  type="button"
+                  :class="{ 'is-active': store.state.theme === 'light' }"
+                  @click="store.actions.setTheme('light')"
+                >
+                  浅色
+                </button>
+              </div>
+            </FieldRow>
+          </div>
+        </article>
+
+        <article class="panel compact-panel widget-settings-card">
+          <header class="panel-head widget-settings-head">
+            <div>
+              <h2>桌面悬浮球</h2>
+              <p>常驻显示额度环，单击后直接展开完整用量面板。</p>
+            </div>
+            <div class="widget-settings-control">
+              <ToneChip :tone="store.selectors.floatingWidgetStatusTone()">
+                {{ store.selectors.floatingWidgetStatusLabel() }}
+              </ToneChip>
               <button
+                class="widget-toggle-button"
                 type="button"
-                :class="{ 'is-active': store.state.theme === 'dark' }"
-                @click="store.actions.setTheme('dark')"
+                :aria-label="store.state.floatingWidget.enabled ? '关闭桌面悬浮球' : '开启桌面悬浮球'"
+                :aria-pressed="store.state.floatingWidget.enabled"
+                :disabled="store.state.floatingWidget.busy || store.state.floatingWidget.repairing || store.state.floatingWidget.refreshing"
+                @click="store.actions.toggleFloatingWidgetAction"
               >
-                深色（默认）
-              </button>
-              <button
-                type="button"
-                :class="{ 'is-active': store.state.theme === 'light' }"
-                @click="store.actions.setTheme('light')"
-              >
-                浅色
+                <span class="toggle" :class="{ 'is-on': store.state.floatingWidget.enabled }" aria-hidden="true"></span>
               </button>
             </div>
-          </FieldRow>
-        </div>
-      </article>
+          </header>
+          <div class="inline-alert" :class="{ error: store.state.floatingWidget.enabled && !store.state.floatingWidget.running && store.state.floatingWidget.message }">
+            <strong>{{ store.selectors.floatingWidgetStatusLabel() }}</strong>
+            <span>{{ store.selectors.floatingWidgetStatusDetail() }}</span>
+          </div>
+          <InfoTable :rows="floatingWidgetRows" />
+          <div class="actions">
+            <AppButton
+              icon="RefreshCw"
+              :loading="store.state.floatingWidget.refreshing"
+              :disabled="store.state.floatingWidget.busy || store.state.floatingWidget.repairing || store.state.floatingWidget.refreshing"
+              @click="store.actions.refreshFloatingWidgetStatus({ notify: true })"
+            >刷新状态</AppButton>
+            <AppButton
+              icon="ShieldCheck"
+              :loading="store.state.floatingWidget.repairing"
+              :disabled="store.state.floatingWidget.busy || store.state.floatingWidget.repairing || store.state.floatingWidget.refreshing"
+              @click="store.actions.repairFloatingWidgetCredentialAction"
+            >重新授权</AppButton>
+          </div>
+        </article>
+      </template>
 
       <article v-else-if="store.state.settingsTab === 'backend'" class="panel compact-panel">
         <header class="panel-head"><h2>本机服务</h2></header>

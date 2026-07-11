@@ -317,6 +317,16 @@ export function createInitialState() {
       backupPath: "",
       message: "尚未检测 Codex hooks。"
     },
+    floatingWidget: {
+      enabled: false,
+      running: false,
+      restartAttempts: 0,
+      message: "尚未读取悬浮球状态。",
+      busy: false,
+      repairing: false,
+      refreshing: false,
+      checkedAt: ""
+    },
     globalHealthSummary: {
       checking: false,
       lastCheckedAt: "",
