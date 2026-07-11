@@ -875,12 +875,11 @@ func contextCompactionSignature(compaction *sessions.ContextCompactionSnapshot) 
 }
 
 func (a *App) sessionSnapshot(options statusResponseOptions) (sessions.Snapshot, error) {
-	if options.IncludeDailyTrend30d {
-		if source, ok := a.sessions.(optionalSessionSnapshotSource); ok {
-			return source.SnapshotWithOptions(sessions.SnapshotOptions{
-				IncludeDailyTrend30d: true,
-			})
-		}
+	if source, ok := a.sessions.(optionalSessionSnapshotSource); ok {
+		return source.SnapshotWithOptions(sessions.SnapshotOptions{
+			IncludeDailyTrend30d: options.IncludeDailyTrend30d,
+			SkipSessions:         !options.IncludeSessions,
+		})
 	}
 	return a.sessions.Snapshot()
 }
