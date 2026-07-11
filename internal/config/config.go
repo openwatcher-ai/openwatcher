@@ -40,6 +40,7 @@ type Config struct {
 	DevUpdateAllowlist  string          `json:"devUpdateAllowlist,omitempty"`
 	ScreenshotUploadDir string          `json:"screenshotUploadDir,omitempty"`
 	DiagnosticUploadDir string          `json:"diagnosticUploadDir,omitempty"`
+	WidgetTokenHash     string          `json:"widgetTokenHash,omitempty"`
 	BetaPairing         *PairingBinding `json:"betaPairing,omitempty"`
 	DevPairing          *PairingBinding `json:"devPairing,omitempty"`
 	TokenHash           string          `json:"tokenHash,omitempty"`
