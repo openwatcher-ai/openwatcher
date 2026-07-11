@@ -3,11 +3,11 @@ package widget
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -292,12 +292,33 @@ func (p commandProcess) Kill() error { return p.cmd.Process.Kill() }
 func (p commandProcess) Wait() error { return p.cmd.Wait() }
 
 func startProcess(path, token string, args ...string) (Process, error) {
+	stdinReader, stdinWriter, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("创建悬浮球凭据管道失败: %w", err)
+	}
+	closePipe := func() {
+		_ = stdinReader.Close()
+		_ = stdinWriter.Close()
+	}
+
 	cmd := exec.Command(path, args...)
-	cmd.Stdin = strings.NewReader(token + "\n")
+	cmd.Stdin = stdinReader
 	processutil.HideConsoleWindow(cmd)
 	if err := cmd.Start(); err != nil {
+		closePipe()
 		return nil, err
 	}
-	cmd.Stdin = nil
+	_ = stdinReader.Close()
+	if _, err := stdinWriter.WriteString(token + "\n"); err != nil {
+		_ = stdinWriter.Close()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, fmt.Errorf("传递悬浮球凭据失败: %w", err)
+	}
+	if err := stdinWriter.Close(); err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, fmt.Errorf("关闭悬浮球凭据管道失败: %w", err)
+	}
 	return commandProcess{cmd}, nil
 }
