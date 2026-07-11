@@ -52,8 +52,11 @@ func TestDailyPricingCacheFetchesAndReusesDailySnapshot(t *testing.T) {
 	if got := atomic.LoadInt32(&requests); got != 1 {
 		t.Fatalf("requests after first snapshot = %d, want 1", got)
 	}
-	if first.Source != "openai-docs" || first.Models["gpt-5.4"].OutputPerMillion != 15 {
+	if first.Source != "openai-docs+built-in-fallback" || first.Models["gpt-5.4"].OutputPerMillion != 15 {
 		t.Fatalf("first snapshot = %#v", first)
+	}
+	if got := first.Models["gpt-5.6-sol"]; got.InputPerMillion != 5 || got.CachedInputPerMillion != 0.5 || got.OutputPerMillion != 30 {
+		t.Fatalf("supplemented gpt-5.6-sol pricing = %#v", got)
 	}
 
 	second, err := cache.snapshotForDay(now.Add(2 * time.Hour))
@@ -88,6 +91,28 @@ func TestDailyPricingCacheUsesFallbackWhenFetchFails(t *testing.T) {
 	}
 	if got := snapshot.Models["gpt-5.4"]; got.InputPerMillion != 2.5 || got.OutputPerMillion != 15 {
 		t.Fatalf("fallback gpt-5.4 pricing = %#v", got)
+	}
+	if got := snapshot.Models["gpt-5.6-luna"]; got.InputPerMillion != 1 || got.CachedInputPerMillion != 0.1 || got.OutputPerMillion != 6 {
+		t.Fatalf("fallback gpt-5.6-luna pricing = %#v", got)
+	}
+}
+
+func TestSupplementModelPricingPreservesFetchedValues(t *testing.T) {
+	now := time.Date(2026, 7, 11, 8, 0, 0, 0, time.UTC)
+	snapshot := supplementModelPricingSnapshot(modelPricingSnapshot{
+		Source: "openai-docs",
+		Models: map[string]modelPricing{
+			"gpt-5.6-sol": {InputPerMillion: 6, CachedInputPerMillion: 0.6, OutputPerMillion: 36},
+		},
+	}, now)
+	if got := snapshot.Models["gpt-5.6-sol"]; got.InputPerMillion != 6 || got.OutputPerMillion != 36 {
+		t.Fatalf("fetched pricing was overwritten: %#v", got)
+	}
+	if _, ok := snapshot.Models["gpt-5.4-mini"]; !ok {
+		t.Fatal("missing built-in pricing was not supplemented")
+	}
+	if snapshot.Source != "openai-docs+built-in-fallback" {
+		t.Fatalf("snapshot source = %q", snapshot.Source)
 	}
 }
 

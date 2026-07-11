@@ -98,7 +98,7 @@ func (c *dailyPricingCache) snapshotForDay(now time.Time) (modelPricingSnapshot,
 		return modelPricingSnapshot{}, err
 	}
 	if snapshot, err := readModelPricingSnapshot(path); err == nil && len(snapshot.Models) > 0 {
-		return snapshot, nil
+		return supplementModelPricingSnapshot(snapshot, now), nil
 	}
 
 	snapshot, fetchErr := c.fetchSnapshotForDay(now)
@@ -106,6 +106,7 @@ func (c *dailyPricingCache) snapshotForDay(now time.Time) (modelPricingSnapshot,
 		snapshot = defaultModelPricingSnapshot(now)
 		snapshot.Source = "built-in-fallback"
 	}
+	snapshot = supplementModelPricingSnapshot(snapshot, now)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return modelPricingSnapshot{}, err
 	}
@@ -191,6 +192,9 @@ func defaultModelPricingSnapshot(now time.Time) modelPricingSnapshot {
 		Source:    "built-in-fallback",
 		FetchedAt: now.Format(time.RFC3339),
 		Models: map[string]modelPricing{
+			"gpt-5.6-sol":       {InputPerMillion: 5.00, CachedInputPerMillion: 0.50, OutputPerMillion: 30.00},
+			"gpt-5.6-terra":     {InputPerMillion: 2.50, CachedInputPerMillion: 0.25, OutputPerMillion: 15.00},
+			"gpt-5.6-luna":      {InputPerMillion: 1.00, CachedInputPerMillion: 0.10, OutputPerMillion: 6.00},
 			"gpt-5.5":           {InputPerMillion: 5.00, CachedInputPerMillion: 0.50, OutputPerMillion: 30.00},
 			"gpt-5.5-pro":       {InputPerMillion: 30.00, CachedInputPerMillion: 0.00, OutputPerMillion: 180.00},
 			"gpt-5.4":           {InputPerMillion: 2.50, CachedInputPerMillion: 0.25, OutputPerMillion: 15.00},
@@ -216,6 +220,29 @@ func defaultModelPricingSnapshot(now time.Time) modelPricingSnapshot {
 			"gpt-4o-mini":       {InputPerMillion: 0.15, CachedInputPerMillion: 0.075, OutputPerMillion: 0.60},
 		},
 	}
+}
+
+func supplementModelPricingSnapshot(snapshot modelPricingSnapshot, now time.Time) modelPricingSnapshot {
+	fallback := defaultModelPricingSnapshot(now)
+	if snapshot.Models == nil {
+		snapshot.Models = make(map[string]modelPricing, len(fallback.Models))
+	}
+	added := false
+	for model, pricing := range fallback.Models {
+		if _, exists := snapshot.Models[model]; exists {
+			continue
+		}
+		snapshot.Models[model] = pricing
+		added = true
+	}
+	if added && snapshot.Source != "built-in-fallback" && !strings.Contains(snapshot.Source, "+built-in-fallback") {
+		if snapshot.Source == "" {
+			snapshot.Source = "built-in-fallback"
+		} else {
+			snapshot.Source += "+built-in-fallback"
+		}
+	}
+	return snapshot
 }
 
 func parseOpenAITextModelPricingHTML(content string) (map[string]modelPricing, error) {
