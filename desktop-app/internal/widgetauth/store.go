@@ -19,6 +19,12 @@ var (
 	configMu             sync.Mutex
 )
 
+const (
+	widgetCredentialService       = "ai.openwatcher.widget"
+	widgetCredentialAccount       = "widget-token"
+	widgetCredentialWindowsTarget = "ai.openwatcher.widget/token"
+)
+
 // SecretStore deliberately exposes no logging or serialization hooks.
 type SecretStore interface {
 	Read() (string, error)

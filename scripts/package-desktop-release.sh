@@ -80,6 +80,13 @@ validate_lightweight_bundle() {
   [[ -f "$bundle_root/openwatcher/$platform/$sidecar_name" ]] || die "bundled 内缺少 sidecar：$bundle_root/openwatcher/$platform/$sidecar_name"
   [[ -f "$bundle_root/updater/$platform/$updater_name" ]] || die "bundled 内缺少 updater：$bundle_root/updater/$platform/$updater_name"
   [[ -f "$bundle_root/runtime/channel-manifest-url.txt" ]] || die "bundled 内缺少 channel manifest 地址配置"
+  if [[ "$GOOS_VALUE" == "darwin" ]]; then
+    local helper_app="$bundle_root/../../Library/Helpers/OpenWatcher Widget.app"
+    [[ -f "$helper_app/Contents/MacOS/openwatcher-widget" ]] || die "macOS 包内缺少悬浮球辅助程序：$helper_app"
+    [[ -f "$helper_app/Contents/Info.plist" ]] || die "macOS 包内缺少悬浮球 Info.plist：$helper_app"
+  else
+    [[ -f "$bundle_root/widget/$platform/openwatcher-widget.exe" ]] || die "Windows bundled 内缺少悬浮球辅助程序：$bundle_root/widget/$platform/openwatcher-widget.exe"
+  fi
   for forbidden_dir in platform-tools cloudflared watch-apk; do
     if [[ -d "$bundle_root/$forbidden_dir" ]]; then
       die "Desktop 轻安装包不应再包含 $forbidden_dir：$bundle_root/$forbidden_dir"
@@ -290,6 +297,7 @@ if [[ -z "$SOURCE_PATH" && "$SKIP_BUILD" != "1" ]]; then
       OPENWATCHER_RUNTIME_CHANNEL_MANIFEST_URL="$CHANNEL_MANIFEST_URL" \
       OPENWATCHER_GITHUB_REPOSITORY="$REPOSITORY_NAME" \
       OPENWATCHER_BUNDLE_PLATFORM="$PLATFORM" \
+      OPENWATCHER_DESKTOP_VERSION="$DESKTOP_VERSION" \
       go run github.com/wailsapp/wails/v2/cmd/wails@"$WAILS_VERSION" build \
         -platform "$GOOS_VALUE/$GOARCH_VALUE" \
         -ldflags "-X main.desktopProductVersion=$DESKTOP_VERSION"

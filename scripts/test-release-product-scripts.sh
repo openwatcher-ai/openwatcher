@@ -32,8 +32,10 @@ printf '{"schemaVersion":1,"channel":"beta","generatedAt":"2026-06-11T00:00:00Z"
 
 watch_sha256="$(shasum -a 256 "$watch_apk" | awk '{print $1}')"
 desktop_zip_stage="$TMP_DIR/desktop-zip-stage"
-mkdir -p "$desktop_zip_stage"
-printf 'desktop darwin fixture\n' >"$desktop_zip_stage/OpenWatcher.app"
+mkdir -p "$desktop_zip_stage/OpenWatcher.app/Contents/MacOS"
+mkdir -p "$desktop_zip_stage/OpenWatcher.app/Contents/Library/Helpers/OpenWatcher Widget.app/Contents/MacOS"
+printf 'desktop darwin fixture\n' >"$desktop_zip_stage/OpenWatcher.app/Contents/MacOS/openwatcher"
+printf 'widget darwin fixture\n' >"$desktop_zip_stage/OpenWatcher.app/Contents/Library/Helpers/OpenWatcher Widget.app/Contents/MacOS/openwatcher-widget"
 (
   cd "$desktop_zip_stage"
   zip -qry "$desktop_darwin" OpenWatcher.app

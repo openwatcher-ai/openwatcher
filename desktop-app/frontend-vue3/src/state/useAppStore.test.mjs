@@ -67,6 +67,59 @@ test("autoStartBackend 切换会调用后端保存并写回本地偏好", async 
   assert.match(store.state.notifications[0]?.detail || "", /已关闭“启动后自动启动本机服务”/)
 })
 
+test("桌面悬浮球切换以 Desktop 设置和运行状态为事实源", async () => {
+  const localStorage = createLocalStorage()
+  const calls = []
+  let enabled = false
+  installBrowserGlobals({
+    localStorage,
+    appMethods: {
+      SetFloatingWidgetEnabled: async (next) => {
+        enabled = Boolean(next)
+        calls.push(["SetFloatingWidgetEnabled", enabled])
+        return { autoStartBackend: true, floatingWidgetEnabled: enabled }
+      },
+      GetFloatingWidgetStatus: async () => {
+        calls.push(["GetFloatingWidgetStatus"])
+        return { enabled, running: enabled, restartAttempts: 0, message: "" }
+      }
+    },
+    clipboard: { writeText: async () => {} }
+  })
+
+  const store = createAppStore()
+  await store.actions.toggleFloatingWidgetAction()
+
+  assert.deepEqual(calls, [["SetFloatingWidgetEnabled", true], ["GetFloatingWidgetStatus"]])
+  assert.equal(store.state.floatingWidget.enabled, true)
+  assert.equal(store.state.floatingWidget.running, true)
+  assert.equal(store.selectors.floatingWidgetStatusLabel(), "运行中")
+  assert.match(store.state.notifications[0]?.detail || "", /桌面悬浮球已开启/)
+})
+
+test("悬浮球重新授权会应用后端返回状态并给出反馈", async () => {
+  const calls = []
+  installBrowserGlobals({
+    localStorage: createLocalStorage(),
+    appMethods: {
+      RepairFloatingWidgetCredential: async () => {
+        calls.push("RepairFloatingWidgetCredential")
+        return { enabled: true, running: false, restartAttempts: 0, message: "悬浮球正在等待本机服务" }
+      }
+    },
+    clipboard: { writeText: async () => {} }
+  })
+
+  const store = createAppStore()
+  store.state.floatingWidget.enabled = true
+  await store.actions.repairFloatingWidgetCredentialAction()
+
+  assert.deepEqual(calls, ["RepairFloatingWidgetCredential"])
+  assert.equal(store.state.floatingWidget.running, false)
+  assert.equal(store.state.floatingWidget.message, "悬浮球正在等待本机服务")
+  assert.match(store.state.notifications[0]?.detail || "", /凭据已重新生成/)
+})
+
 test("copyDiagnosticsAction 会调用后端诊断文本并复制到剪贴板", async () => {
   const localStorage = createLocalStorage()
   const calls = []

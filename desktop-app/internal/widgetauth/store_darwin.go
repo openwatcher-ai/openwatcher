@@ -8,10 +8,8 @@ package widgetauth
 #include <CoreFoundation/CoreFoundation.h>
 #include <stdlib.h>
 #include <string.h>
-static const char *service = "ai.openwatcher.widget";
-static const char *account = "widget-token";
 static CFStringRef cfstr(const char *s) { return CFStringCreateWithCString(NULL, s, kCFStringEncodingUTF8); }
-static OSStatus widget_read(char **out, CFIndex *out_len) {
+static OSStatus widget_read(const char *service, const char *account, char **out, CFIndex *out_len) {
   OSStatus st = errSecSuccess;
   CFStringRef svc = NULL, acc = NULL;
   CFMutableDictionaryRef query = NULL;
@@ -46,7 +44,7 @@ cleanup:
   if (acc != NULL) CFRelease(acc);
   return st;
 }
-static OSStatus widget_write(const char *value) {
+static OSStatus widget_write(const char *service, const char *account, const char *value) {
   OSStatus st = errSecSuccess;
   CFStringRef svc = cfstr(service), acc = cfstr(account);
   CFDataRef data = NULL;
@@ -75,7 +73,7 @@ cleanup:
   if (acc != NULL) CFRelease(acc);
   return st;
 }
-static OSStatus widget_delete(void) {
+static OSStatus widget_delete(const char *service, const char *account) {
   OSStatus st = errSecSuccess;
   CFStringRef svc = cfstr(service), acc = cfstr(account);
   CFMutableDictionaryRef query = NULL;
@@ -99,13 +97,25 @@ import (
 	"unsafe"
 )
 
-type systemStore struct{}
+type systemStore struct {
+	service string
+	account string
+}
 
-func NewSystemStore() SecretStore { return systemStore{} }
-func (systemStore) Read() (string, error) {
+func NewSystemStore() SecretStore {
+	return systemStore{service: widgetCredentialService, account: widgetCredentialAccount}
+}
+func newSystemStore(service, account string) systemStore {
+	return systemStore{service: service, account: account}
+}
+func (s systemStore) Read() (string, error) {
 	var out *C.char
 	var length C.CFIndex
-	st := C.widget_read(&out, &length)
+	service := C.CString(s.service)
+	account := C.CString(s.account)
+	defer C.free(unsafe.Pointer(service))
+	defer C.free(unsafe.Pointer(account))
+	st := C.widget_read(service, account, &out, &length)
 	if st == C.errSecItemNotFound {
 		return "", ErrNotFound
 	}
@@ -118,19 +128,27 @@ func (systemStore) Read() (string, error) {
 	defer C.free(unsafe.Pointer(out))
 	return string(C.GoBytes(unsafe.Pointer(out), C.int(length))), nil
 }
-func (systemStore) Write(v string) error {
+func (s systemStore) Write(v string) error {
 	if err := ValidateToken(v); err != nil {
 		return err
 	}
 	cv := C.CString(v)
+	service := C.CString(s.service)
+	account := C.CString(s.account)
 	defer C.free(unsafe.Pointer(cv))
-	if st := C.widget_write(cv); st != C.errSecSuccess {
+	defer C.free(unsafe.Pointer(service))
+	defer C.free(unsafe.Pointer(account))
+	if st := C.widget_write(service, account, cv); st != C.errSecSuccess {
 		return fmt.Errorf("写入 Keychain 悬浮球凭据失败: %d", st)
 	}
 	return nil
 }
-func (systemStore) Delete() error {
-	st := C.widget_delete()
+func (s systemStore) Delete() error {
+	service := C.CString(s.service)
+	account := C.CString(s.account)
+	defer C.free(unsafe.Pointer(service))
+	defer C.free(unsafe.Pointer(account))
+	st := C.widget_delete(service, account)
 	if st == C.errSecItemNotFound {
 		return nil
 	}

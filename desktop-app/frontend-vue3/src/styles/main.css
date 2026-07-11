@@ -1168,6 +1168,34 @@ button:disabled {
   justify-self: end;
 }
 
+.widget-settings-head {
+  align-items: center;
+}
+
+.widget-settings-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.widget-toggle-button {
+  min-width: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.widget-toggle-button:not(:disabled):hover .toggle {
+  border-color: rgba(47, 218, 125, 0.5);
+}
+
+.widget-settings-card .inline-alert {
+  min-height: 58px;
+  align-content: center;
+}
+
 .section-head {
   align-items: center;
 }
