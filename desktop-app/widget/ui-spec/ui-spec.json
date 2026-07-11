@@ -1,0 +1,877 @@
+{
+  "schemaVersion": "1.0",
+  "source": {
+    "images": [
+      "openwatcher-widget.normalized.png"
+    ],
+    "rawImages": [
+      "../../../docs/superpowers/specs/assets/openwatcher-desktop-floating-widget-mockup.png"
+    ],
+    "normalization": "prototype-normalization.json",
+    "analysisAt": "2026-07-11T10:10:00.000Z",
+    "notes": "Approved image-generation concept. Structural rules in the committed design override generated geometry: both heatmaps use square cells, the weekly grid is exactly 7x24, the rolling calendar is exactly 5x7, and duplicated today metrics are removed from the quota quadrant."
+  },
+  "target": {
+    "platform": "native-app",
+    "framework": "vue",
+    "implementationMode": "api-backed"
+  },
+  "page": {
+    "name": "OpenWatcher Desktop Floating Widget",
+    "route": "/",
+    "viewport": {
+      "width": 1672,
+      "height": 941,
+      "device": "desktop"
+    }
+  },
+  "layout": {
+    "coordinateSystem": {
+      "unit": "px",
+      "origin": "top-left",
+      "precision": "estimated"
+    },
+    "nodes": [
+      {
+        "id": "widget-root",
+        "type": "page",
+        "name": "Widget root",
+        "component": "WidgetFrame",
+        "parentId": null,
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 1672,
+          "height": 941,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 1
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "fixed",
+          "avoid": [
+            "absolute-position-for-main-layout"
+          ],
+          "notes": "Transparent native window surface; the panel and orb are the only interactive regions."
+        }
+      },
+      {
+        "id": "overview-panel",
+        "type": "region",
+        "name": "Usage overview panel",
+        "component": "OverviewPanel",
+        "parentId": "widget-root",
+        "bbox": {
+          "x": 68,
+          "y": 39,
+          "width": 1535,
+          "height": 794,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.96
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "grid",
+          "avoid": [
+            "nested-card-grid"
+          ],
+          "notes": "One bordered panel with a compact header and a two-by-two quadrant grid."
+        }
+      },
+      {
+        "id": "overview-header",
+        "type": "region",
+        "name": "Overview header",
+        "component": "HeaderBar",
+        "parentId": "overview-panel",
+        "bbox": {
+          "x": 69,
+          "y": 39,
+          "width": 1533,
+          "height": 56,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.94
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "flex",
+          "avoid": [],
+          "notes": "Title at left; connection state, refresh and close at right."
+        }
+      },
+      {
+        "id": "overview-title",
+        "type": "text",
+        "name": "Overview title",
+        "component": "heading",
+        "parentId": "overview-header",
+        "text": "用量概览",
+        "bbox": {
+          "x": 97,
+          "y": 56,
+          "width": 96,
+          "height": 27,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.9
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "document-flow",
+          "avoid": [],
+          "notes": "Compact desktop title, not a hero heading."
+        }
+      },
+      {
+        "id": "quota-panel",
+        "type": "region",
+        "name": "Quota quadrant",
+        "component": "QuotaPanel",
+        "parentId": "overview-panel",
+        "bbox": {
+          "x": 72,
+          "y": 95,
+          "width": 764,
+          "height": 357,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.94
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "flex",
+          "avoid": [],
+          "notes": "Two quota rings plus plan, reset and freshness metadata."
+        }
+      },
+      {
+        "id": "today-panel",
+        "type": "region",
+        "name": "Today quadrant",
+        "component": "TodayPanel",
+        "parentId": "overview-panel",
+        "bbox": {
+          "x": 836,
+          "y": 95,
+          "width": 763,
+          "height": 357,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.94
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "flex",
+          "avoid": [],
+          "notes": "Exactly 24 hourly bars, one composition bar, total tokens and API value."
+        }
+      },
+      {
+        "id": "weekly-panel",
+        "type": "region",
+        "name": "Weekly quadrant",
+        "component": "WeeklyPanel",
+        "parentId": "overview-panel",
+        "bbox": {
+          "x": 72,
+          "y": 452,
+          "width": 764,
+          "height": 377,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.94
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "grid",
+          "avoid": [
+            "rectangular-heatmap-cells"
+          ],
+          "notes": "Seven date rows and exactly 24 square cells per row."
+        }
+      },
+      {
+        "id": "trend-panel",
+        "type": "region",
+        "name": "Rolling 30-day quadrant",
+        "component": "Trend30dPanel",
+        "parentId": "overview-panel",
+        "bbox": {
+          "x": 836,
+          "y": 452,
+          "width": 763,
+          "height": 377,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.94
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "flex",
+          "avoid": [
+            "rectangular-calendar-cells"
+          ],
+          "notes": "Five-by-seven weekday occurrence calendar plus three summaries and value."
+        }
+      },
+      {
+        "id": "quota-rings",
+        "type": "component",
+        "name": "Quota ring group",
+        "component": "QuotaRing",
+        "parentId": "quota-panel",
+        "bbox": {
+          "x": 96,
+          "y": 145,
+          "width": 422,
+          "height": 240,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.82
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "flex",
+          "avoid": [
+            "canvas-text"
+          ],
+          "notes": "SVG arcs with code-native text."
+        }
+      },
+      {
+        "id": "today-bars",
+        "type": "component",
+        "name": "Today hourly bars",
+        "component": "HourlyBarChart",
+        "parentId": "today-panel",
+        "bbox": {
+          "x": 868,
+          "y": 193,
+          "width": 697,
+          "height": 120,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.84
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "grid",
+          "avoid": [
+            "canvas-only-chart"
+          ],
+          "notes": "Exactly 24 accessible DOM bars."
+        }
+      },
+      {
+        "id": "today-composition",
+        "type": "component",
+        "name": "Today composition bar",
+        "component": "UsageCompositionBar",
+        "parentId": "today-panel",
+        "bbox": {
+          "x": 868,
+          "y": 353,
+          "width": 697,
+          "height": 47,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.88
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "flex",
+          "avoid": [],
+          "notes": "Uncached input, cached input and output plus reasoning."
+        }
+      },
+      {
+        "id": "weekly-grid",
+        "type": "component",
+        "name": "Seven-by-twenty-four heatmap",
+        "component": "Heatmap7d",
+        "parentId": "weekly-panel",
+        "bbox": {
+          "x": 154,
+          "y": 528,
+          "width": 642,
+          "height": 207,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.78
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "grid",
+          "avoid": [
+            "stretched-grid-cells"
+          ],
+          "notes": "ResizeObserver computes one shared square cell size."
+        }
+      },
+      {
+        "id": "calendar-grid",
+        "type": "component",
+        "name": "Five-by-seven calendar heatmap",
+        "component": "Calendar30d",
+        "parentId": "trend-panel",
+        "bbox": {
+          "x": 869,
+          "y": 530,
+          "width": 673,
+          "height": 139,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.72
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "grid",
+          "avoid": [
+            "stretched-grid-cells",
+            "natural-month-sixth-row"
+          ],
+          "notes": "Exactly 35 square slots: 30 data cells and 5 placeholders."
+        }
+      },
+      {
+        "id": "floating-orb",
+        "type": "control",
+        "name": "Floating quota orb",
+        "component": "FloatingOrb",
+        "parentId": "widget-root",
+        "bbox": {
+          "x": 1510,
+          "y": 758,
+          "width": 130,
+          "height": 130,
+          "source": "openwatcher-widget.normalized.png",
+          "confidence": 0.9
+        },
+        "implementationLayoutHint": {
+          "preferredCss": "absolute",
+          "avoid": [],
+          "notes": "The native collapsed size is 56x56 logical pixels; the native-size concept is proportionally enlarged."
+        }
+      }
+    ],
+    "groups": [
+      {
+        "id": "overview-quadrants",
+        "type": "grid",
+        "children": [
+          "quota-panel",
+          "today-panel",
+          "weekly-panel",
+          "trend-panel"
+        ],
+        "direction": "row-wrap",
+        "columnsApprox": 2,
+        "rowsApprox": 2,
+        "gapXApproxPx": 0,
+        "gapYApproxPx": 0,
+        "alignment": "stretch",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.97
+      },
+      {
+        "id": "quota-ring-row",
+        "type": "row",
+        "children": [
+          "quota-rings"
+        ],
+        "direction": "row",
+        "columnsApprox": 2,
+        "alignment": "center",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.9
+      }
+    ],
+    "relations": [
+      {
+        "type": "contains",
+        "from": "widget-root",
+        "to": "overview-panel",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 1
+      },
+      {
+        "type": "contains",
+        "from": "overview-panel",
+        "to": "overview-header",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 1
+      },
+      {
+        "type": "below",
+        "from": "overview-header",
+        "to": "quota-panel",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.97
+      },
+      {
+        "type": "right-of",
+        "from": "quota-panel",
+        "to": "today-panel",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.97
+      },
+      {
+        "type": "below",
+        "from": "quota-panel",
+        "to": "weekly-panel",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.97
+      },
+      {
+        "type": "right-of",
+        "from": "weekly-panel",
+        "to": "trend-panel",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.97
+      },
+      {
+        "type": "overlaps",
+        "from": "floating-orb",
+        "to": "overview-panel",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.86
+      }
+    ],
+    "constraints": [
+      {
+        "id": "panel-max-width",
+        "target": "overview-panel",
+        "type": "max-width",
+        "valueApproxPx": 1535,
+        "responsive": "scale-to-about-1120-logical-pixels-in-native-window",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.9
+      },
+      {
+        "id": "orb-square",
+        "target": "floating-orb",
+        "type": "aspect-ratio",
+        "valueApproxPx": 1,
+        "responsive": "keep-square",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 1
+      },
+      {
+        "id": "weekly-square-cells",
+        "target": "weekly-grid",
+        "type": "aspect-ratio",
+        "valueApproxPx": 1,
+        "responsive": "each-child-cell-must-remain-square",
+        "source": "committed-design",
+        "confidence": 1
+      },
+      {
+        "id": "calendar-square-cells",
+        "target": "calendar-grid",
+        "type": "aspect-ratio",
+        "valueApproxPx": 1,
+        "responsive": "each-child-cell-must-remain-square",
+        "source": "committed-design",
+        "confidence": 1
+      }
+    ]
+  },
+  "content": {
+    "texts": [
+      "用量概览",
+      "接口在线 · 刚刚更新",
+      "额度",
+      "5h",
+      "7d",
+      "当前方案",
+      "重置时间 (5h)",
+      "重置时间 (7d)",
+      "今日 24 小时",
+      "输入",
+      "缓存输入",
+      "输出",
+      "今日总Token:",
+      "API折算价值:",
+      "近 7 天 × 24 小时",
+      "低",
+      "高",
+      "最近 30 天",
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat",
+      "Sun",
+      "累计",
+      "峰值",
+      "日均",
+      "30天价值"
+    ],
+    "images": [],
+    "icons": [
+      {
+        "id": "refresh-icon",
+        "name": "refresh",
+        "source": "@lucide/vue",
+        "style": "outline",
+        "sizeApproxPx": 24,
+        "color": "#F4F7FB"
+      },
+      {
+        "id": "close-icon",
+        "name": "x",
+        "source": "@lucide/vue",
+        "style": "outline",
+        "sizeApproxPx": 24,
+        "color": "#F4F7FB"
+      }
+    ]
+  },
+  "visual": {
+    "colors": [
+      {
+        "name": "background",
+        "value": "#05070B",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.95
+      },
+      {
+        "name": "surface",
+        "value": "#0D121A",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.9
+      },
+      {
+        "name": "text",
+        "value": "#F4F7FB",
+        "source": "watch-design-and-concept",
+        "confidence": 0.96
+      },
+      {
+        "name": "muted",
+        "value": "#ADB9CC",
+        "source": "watch-design-and-concept",
+        "confidence": 0.94
+      },
+      {
+        "name": "cyan",
+        "value": "#27E7F4",
+        "source": "watch-design-and-concept",
+        "confidence": 0.97
+      },
+      {
+        "name": "border",
+        "value": "#303844",
+        "source": "watch-design-and-concept",
+        "confidence": 0.9
+      },
+      {
+        "name": "heatmap-low",
+        "value": "#213326",
+        "source": "watch-code",
+        "confidence": 1
+      },
+      {
+        "name": "heatmap-high",
+        "value": "#FF5B2D",
+        "source": "watch-code",
+        "confidence": 1
+      }
+    ],
+    "typography": [
+      {
+        "name": "ui",
+        "family": "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        "sizeApproxPx": 17,
+        "weight": 500,
+        "lineHeightApproxPx": 24,
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.72
+      },
+      {
+        "name": "numeric",
+        "family": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+        "sizeApproxPx": 26,
+        "weight": 600,
+        "lineHeightApproxPx": 30,
+        "source": "committed-design",
+        "confidence": 0.9
+      }
+    ],
+    "spacing": [
+      {
+        "name": "panel-padding",
+        "observedApproxPx": 24,
+        "tokenGuess": "space-6",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.82
+      },
+      {
+        "name": "grid-gap",
+        "observedApproxPx": 5,
+        "tokenGuess": "space-1",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.8
+      }
+    ],
+    "radius": [
+      {
+        "name": "panel",
+        "observedApproxPx": 12,
+        "tokenGuess": "radius-lg",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.86
+      },
+      {
+        "name": "cell",
+        "observedApproxPx": 3,
+        "tokenGuess": "radius-xs",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.74
+      }
+    ],
+    "shadows": [
+      {
+        "name": "panel",
+        "value": "0 18px 50px rgba(0, 0, 0, 0.36)",
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.68
+      }
+    ]
+  },
+  "states": {
+    "loading": [
+      "Gray empty orb with dash",
+      "Panel displays 正在连接 without sample values"
+    ],
+    "empty": [
+      "Missing module uses a local short empty state",
+      "Missing data is never rendered as a fabricated zero dataset"
+    ],
+    "error": [
+      "30 seconds without event or heartbeat enters reconnecting",
+      "60 seconds without fresh data dims retained values",
+      "Invalid credential offers 打开 OpenWatcher",
+      "Offline sidecar offers 打开 OpenWatcher"
+    ],
+    "interactive": [
+      "Orb cycles 5h and 7d every four seconds",
+      "Hover pauses the orb cycle",
+      "Click toggles expanded state",
+      "Chart hover shows an ephemeral tooltip",
+      "Chart click pins or replaces the tooltip",
+      "Escape, orb click or close collapses the panel"
+    ]
+  },
+  "data": {
+    "mockData": [
+      "The Vite fallback preview uses the exact approved concept values only for visual QA."
+    ],
+    "apiNeeds": [
+      "GET /api/status?includeDailyTrend30d=1&includeSessions=0",
+      "GET /api/status/stream?includeDailyTrend30d=1&includeSessions=0",
+      "Dedicated loopback-only widget credential",
+      "No sessions payload or status_sessions event"
+    ],
+    "bindings": [
+      "quota.fiveHour.remainingPercent -> five-hour ring",
+      "quota.weekly.remainingPercent -> weekly ring",
+      "heatmap24h.buckets -> exactly 24 hourly bars",
+      "heatmap7d.days[].hours -> exactly 168 square cells",
+      "dailyUsage -> composition, total and today value",
+      "dailyTrend30d.days -> exactly 30 calendar data cells",
+      "dailyTrend30d totals and estimatedValueLabel -> period summary"
+    ]
+  },
+  "responsive": {
+    "breakpoints": [
+      {
+        "name": "concept-native",
+        "minWidthPx": 1500,
+        "source": "openwatcher-widget.normalized.png",
+        "confidence": 0.9
+      },
+      {
+        "name": "native-default",
+        "minWidthPx": 1120,
+        "source": "committed-design",
+        "confidence": 1
+      },
+      {
+        "name": "native-minimum",
+        "minWidthPx": 920,
+        "source": "committed-design",
+        "confidence": 1
+      }
+    ],
+    "rules": [
+      "Keep two columns and two rows down to the native minimum.",
+      "Scale typography, padding, ring size and cell gaps together.",
+      "Never change the weekly or calendar cell counts.",
+      "Below the structural minimum, allow panel scrolling rather than dropping modules."
+    ]
+  },
+  "implementationHints": [
+    "Use the existing Vue 3 and Vite stack.",
+    "Use SVG for quota rings and DOM/CSS Grid for charts.",
+    "Use ResizeObserver to compute one integer square cell size.",
+    "Keep HTTP, SSE, credentials and window placement in Go.",
+    "Use data-ui-id on every visual QA node.",
+    "Do not ship the raster concept as the interface."
+  ],
+  "validation": {
+    "mustMatch": [
+      "One compact header and four simultaneous quadrants",
+      "Exactly 24 today bars",
+      "Exactly 168 weekly heatmap cells",
+      "Exactly 35 rolling calendar slots with 30 data cells",
+      "All heatmap cells are square",
+      "No session details or duplicated today metrics in quota panel"
+    ],
+    "screenshots": [
+      "expanded concept-native viewport 1672x941",
+      "expanded native window approximately 1120x580",
+      "collapsed native window 56x56"
+    ],
+    "visualQa": {
+      "referenceImage": "openwatcher-widget.normalized.png",
+      "targetUrl": "http://127.0.0.1:34117/",
+      "allowNoReference": false,
+      "allowNoNormalization": false,
+      "fullPage": false,
+      "viewport": {
+        "width": 1672,
+        "height": 941,
+        "deviceScaleFactor": 1
+      },
+      "thresholds": {
+        "bboxTolerancePx": 28,
+        "relationTolerancePx": 18,
+        "colorDeltaMax": 24,
+        "regionDiffMax": 0.16,
+        "pageDiffMax": 0.18,
+        "pageDiffPixelsMax": 300000
+      },
+      "requiredNodes": [
+        {
+          "id": "widget-root",
+          "selector": "[data-ui-id='widget-root']",
+          "checks": [
+            "visible",
+            "bbox",
+            "style"
+          ],
+          "expectedStyle": {
+            "backgroundColor": "#05070b"
+          },
+          "priority": "high"
+        },
+        {
+          "id": "overview-panel",
+          "selector": "[data-ui-id='overview-panel']",
+          "checks": [
+            "visible",
+            "bbox",
+            "style"
+          ],
+          "priority": "high"
+        },
+        {
+          "id": "overview-header",
+          "selector": "[data-ui-id='overview-header']",
+          "checks": [
+            "visible",
+            "bbox"
+          ],
+          "priority": "medium"
+        },
+        {
+          "id": "overview-title",
+          "selector": "[data-ui-id='overview-title']",
+          "checks": [
+            "visible",
+            "text",
+            "bbox"
+          ],
+          "expectedText": "用量概览",
+          "priority": "high"
+        },
+        {
+          "id": "quota-panel",
+          "selector": "[data-ui-id='quota-panel']",
+          "checks": [
+            "visible",
+            "bbox",
+            "style"
+          ],
+          "priority": "high"
+        },
+        {
+          "id": "today-panel",
+          "selector": "[data-ui-id='today-panel']",
+          "checks": [
+            "visible",
+            "bbox",
+            "style"
+          ],
+          "priority": "high"
+        },
+        {
+          "id": "weekly-panel",
+          "selector": "[data-ui-id='weekly-panel']",
+          "checks": [
+            "visible",
+            "bbox",
+            "style"
+          ],
+          "priority": "high"
+        },
+        {
+          "id": "trend-panel",
+          "selector": "[data-ui-id='trend-panel']",
+          "checks": [
+            "visible",
+            "bbox",
+            "style"
+          ],
+          "priority": "high"
+        },
+        {
+          "id": "quota-rings",
+          "selector": "[data-ui-id='quota-rings']",
+          "checks": [
+            "visible",
+            "bbox"
+          ],
+          "priority": "medium"
+        },
+        {
+          "id": "today-bars",
+          "selector": "[data-ui-id='today-bars']",
+          "checks": [
+            "visible",
+            "bbox"
+          ],
+          "priority": "medium"
+        },
+        {
+          "id": "today-composition",
+          "selector": "[data-ui-id='today-composition']",
+          "checks": [
+            "visible",
+            "bbox"
+          ],
+          "priority": "medium"
+        },
+        {
+          "id": "weekly-grid",
+          "selector": "[data-ui-id='weekly-grid']",
+          "checks": [
+            "visible",
+            "bbox"
+          ],
+          "priority": "high"
+        },
+        {
+          "id": "calendar-grid",
+          "selector": "[data-ui-id='calendar-grid']",
+          "checks": [
+            "visible",
+            "bbox"
+          ],
+          "priority": "high"
+        },
+        {
+          "id": "floating-orb",
+          "selector": "[data-ui-id='floating-orb']",
+          "checks": [
+            "visible",
+            "bbox",
+            "style"
+          ],
+          "priority": "high"
+        }
+      ],
+      "masks": []
+    }
+  },
+  "unknowns": []
+}

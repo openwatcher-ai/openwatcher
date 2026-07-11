@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "mode": "single",
+  "rawImage": "../../../docs/superpowers/specs/assets/openwatcher-desktop-floating-widget-mockup.png",
+  "normalizedImage": "openwatcher-widget.normalized.png",
+  "cropPreview": "openwatcher-widget.normalized.crop-preview.png",
+  "kind": "pure-page",
+  "confirmed": true,
+  "crop": {
+    "x": 0,
+    "y": 0,
+    "width": 1672,
+    "height": 941
+  },
+  "sourceImageSize": {
+    "width": 1672,
+    "height": 941
+  },
+  "normalizedImageSize": {
+    "width": 1672,
+    "height": 941
+  },
+  "attempts": [
+    {
+      "crop": {
+        "x": 0,
+        "y": 0,
+        "width": 1672,
+        "height": 941
+      },
+      "result": "accepted",
+      "reason": "approved full-surface desktop widget mockup without browser or device chrome",
+      "createdAt": "2026-07-11T09:47:05.050Z"
+    }
+  ]
+}
