@@ -71,6 +71,9 @@ func (a *App) Startup(ctx context.Context) {
 	a.apply(g)
 	a.startClient()
 }
+func (a *App) DomReady(ctx context.Context) {
+	setWidgetPlatform(ctx)
+}
 func (a *App) Shutdown(context.Context) {
 	a.mu.Lock()
 	if a.cancel != nil {

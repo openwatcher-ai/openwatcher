@@ -4,8 +4,10 @@ package main
 
 /*
 #cgo CFLAGS: -x objective-c -fblocks
-#cgo LDFLAGS: -framework Cocoa -framework UniformTypeIdentifiers
+#cgo LDFLAGS: -framework Cocoa -framework QuartzCore -framework UniformTypeIdentifiers -framework WebKit
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
+#import <WebKit/WebKit.h>
 #import <dispatch/dispatch.h>
 typedef struct { double x,y,w,h; unsigned int displayID; } OWRect;
 
@@ -24,8 +26,37 @@ static double ow_desktop_top(void) {
   NSArray<NSScreen *> *screens=[NSScreen screens];
   return [screens count] == 0 ? 0 : NSMaxY([[screens objectAtIndex:0] frame]);
 }
+static void ow_clear_widget_view(NSView *view) {
+  if (view == nil) return;
+  [view setWantsLayer:YES];
+  view.layer.backgroundColor=[NSColor clearColor].CGColor;
+  if ([view isKindOfClass:[NSVisualEffectView class]]) {
+    [(NSVisualEffectView *)view setState:NSVisualEffectStateInactive];
+    [view setHidden:YES];
+  }
+  if ([view isKindOfClass:[WKWebView class]]) {
+    WKWebView *webview=(WKWebView *)view;
+    [webview setValue:@NO forKey:@"drawsBackground"];
+    if (@available(macOS 12.0, *)) {
+      [webview setUnderPageBackgroundColor:[NSColor clearColor]];
+    }
+  }
+  for (NSView *subview in [view subviews]) ow_clear_widget_view(subview);
+}
+static void ow_configure_widget_window(void) {
+  NSWindow *window=ow_widget_window();
+  if (window == nil) return;
+  [window setOpaque:NO];
+  [window setBackgroundColor:[NSColor clearColor]];
+  [window setHasShadow:NO];
+  ow_clear_widget_view([window contentView]);
+}
 static void ow_widget_accessory(void) {
-  ow_on_main(^{ [[NSApplication sharedApplication] setActivationPolicy:NSApplicationActivationPolicyAccessory]; });
+  ow_on_main(^{
+    [[NSApplication sharedApplication] setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    ow_configure_widget_window();
+    dispatch_async(dispatch_get_main_queue(), ^{ ow_configure_widget_window(); });
+  });
 }
 static int ow_screens(OWRect *out, int max) {
   __block int n=0;
@@ -58,6 +89,7 @@ static void ow_apply_rect(OWRect value) {
     double top=ow_desktop_top();
     NSRect r=NSMakeRect(value.x,top-value.y-value.h,value.w,value.h);
     [window setFrame:r display:YES animate:NO];
+    ow_configure_widget_window();
   });
 }
 static void ow_open_main(void) {

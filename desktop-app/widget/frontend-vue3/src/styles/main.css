@@ -1,5 +1,16 @@
 :root {
-  color: #f4f7fb;
+  --ow-background: #05070b;
+  --ow-surface: #0d121a;
+  --ow-surface-soft: #111823;
+  --ow-text: #f4f7fb;
+  --ow-muted: #adb9cc;
+  --ow-dim: #748092;
+  --ow-border: #303844;
+  --ow-divider: rgb(255 255 255 / 13%);
+  --ow-cyan: #27e7f4;
+  --ow-green: #6de4a0;
+  --ow-purple: #7c66ff;
+  color: var(--ow-text);
   background: transparent;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-variant-numeric: tabular-nums;
@@ -19,7 +30,13 @@ body,
   background: transparent;
 }
 
+html.browser-preview,
+html.browser-preview body {
+  background: var(--ow-background);
+}
+
 button {
+  color: inherit;
   font: inherit;
 }
 
@@ -31,37 +48,36 @@ button {
   outline: none;
 }
 
-.widget-root.expanded {
-  background: #05070b;
-}
-
 .overview-panel {
   position: absolute;
-  inset: 0;
+  inset: 3px;
   overflow: hidden;
-  background: linear-gradient(135deg, #0d121a, #111823);
-  border: 1px solid #303844;
-  border-radius: 12px;
-  box-shadow: 0 18px 50px rgb(0 0 0 / 36%);
+  border: 1px solid var(--ow-border);
+  border-radius: 11px;
+  background: var(--ow-background);
+  box-shadow:
+    0 10px 28px rgb(0 0 0 / 42%),
+    inset 0 1px 0 rgb(255 255 255 / 3%);
 }
 
 .overview-header {
-  height: 44px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 0 16px;
-  border-bottom: 1px solid #303844;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--ow-divider);
+  background: rgb(13 18 26 / 52%);
 }
 
 .overview-header h1 {
   flex: 0 0 auto;
   margin: 0;
-  color: #27e7f4;
-  font-size: 16px;
-  font-weight: 650;
-  letter-spacing: 0.06em;
+  color: var(--ow-text);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.015em;
 }
 
 .header-actions {
@@ -69,9 +85,9 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  color: #adb9cc;
-  font-size: 11px;
+  gap: 9px;
+  color: var(--ow-muted);
+  font-size: 11.5px;
   white-space: nowrap;
 }
 
@@ -79,15 +95,15 @@ button {
   width: 6px;
   height: 6px;
   display: inline-block;
-  margin-right: 5px;
+  margin-right: 7px;
   border-radius: 50%;
   background: currentColor;
+  box-shadow: 0 0 9px currentColor;
   content: "";
-  box-shadow: 0 0 8px currentColor;
 }
 
 .status-dot.online {
-  color: #6de4a0;
+  color: var(--ow-green);
 }
 
 .status-dot.reconnecting,
@@ -100,12 +116,8 @@ button {
   color: #ff6b5b;
 }
 
-.updated {
-  color: #7f8ba0;
-}
-
 .refresh-feedback {
-  color: #27e7f4;
+  color: var(--ow-cyan);
 }
 
 .icon-button {
@@ -117,7 +129,7 @@ button {
   padding: 0;
   border: 0;
   border-radius: 6px;
-  color: #adb9cc;
+  color: #d6dce6;
   background: transparent;
   cursor: pointer;
 }
@@ -126,7 +138,7 @@ button {
 .icon-button:focus-visible {
   color: #fff;
   background: rgb(255 255 255 / 7%);
-  outline: 1px solid #27e7f4;
+  outline: 1px solid rgb(39 231 244 / 72%);
 }
 
 .icon-button:disabled {
@@ -135,7 +147,7 @@ button {
 }
 
 .open-main {
-  padding: 4px 8px;
+  padding: 5px 9px;
   border: 1px solid #415162;
   border-radius: 5px;
   color: #d5e1ef;
@@ -144,10 +156,10 @@ button {
 }
 
 .quadrants {
-  height: calc(100% - 44px);
+  height: calc(100% - 42px);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: 46% 54%;
+  grid-template-rows: 48% 52%;
 }
 
 .quadrant {
@@ -155,9 +167,10 @@ button {
   min-height: 0;
   position: relative;
   overflow: hidden;
-  padding: 13px 16px;
-  border-right: 1px solid #303844;
-  border-bottom: 1px solid #303844;
+  padding: 17px 18px;
+  border-right: 1px solid var(--ow-divider);
+  border-bottom: 1px solid var(--ow-divider);
+  background: rgb(13 18 26 / 25%);
 }
 
 .quadrant:nth-child(2n) {
@@ -169,136 +182,175 @@ button {
 }
 
 .panel-heading {
-  min-height: 18px;
+  min-height: 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 7px;
+  margin-bottom: 6px;
 }
 
 .panel-heading strong {
-  color: #f4f7fb;
+  color: var(--ow-text);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .eyebrow {
-  color: #27e7f4;
-  font-size: 11px;
+  color: var(--ow-cyan);
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.035em;
 }
 
 .quota-content {
-  height: calc(100% - 25px);
-  display: flex;
+  height: calc(100% - 26px);
+  display: grid;
+  grid-template-columns: minmax(275px, 1.15fr) minmax(205px, 0.85fr);
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .quota-rings {
-  width: 280px;
-  height: 165px;
+  min-width: 0;
+  height: 166px;
   display: flex;
-  flex: 0 0 280px;
   align-items: center;
-  justify-content: center;
-  gap: 32px;
+  justify-content: space-evenly;
+  gap: 12px;
 }
 
 .quota-details {
   min-width: 0;
   display: grid;
-  flex: 1 1 auto;
-  gap: 8px;
+  align-content: center;
+  gap: 3px;
   margin: 0;
 }
 
 .quota-details > div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid rgb(48 56 68 / 55%);
+  min-height: 31px;
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 7px;
+  border-bottom: 1px solid rgb(255 255 255 / 9%);
+}
+
+.quota-details > div:last-child {
+  border-bottom-color: transparent;
 }
 
 .quota-details dt,
 .quota-details dd {
+  min-width: 0;
   margin: 0;
-  font-size: 10px;
 }
 
 .quota-details dt {
-  color: #7f8ba0;
+  overflow: hidden;
+  color: var(--ow-muted);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quota-details dd {
   overflow: hidden;
-  color: #f4f7fb;
+  color: var(--ow-text);
+  font-size: 11.5px;
+  font-weight: 550;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.detail-icon {
+  display: grid;
+  place-items: center;
+}
+
+.detail-icon.plan {
+  color: #38d6a3;
+}
+
+.detail-icon.reset {
+  color: #a975ff;
+}
+
+.detail-icon.status {
+  color: var(--ow-cyan);
+}
+
 .quota-ring {
-  width: 112px;
-  height: 138px;
+  width: 136px;
+  height: 164px;
   position: relative;
+  flex: 0 0 136px;
   outline: none;
 }
 
 .quota-ring:focus-visible {
   border-radius: 50%;
-  outline: 1px solid #27e7f4;
+  outline: 1px solid var(--ow-cyan);
+  outline-offset: 2px;
 }
 
 .quota-ring svg {
-  width: 112px;
-  height: 112px;
+  width: 136px;
+  height: 136px;
+  display: block;
   overflow: visible;
-  transform: rotate(-90deg);
 }
 
-.ring-track,
-.ring-value,
+.quota-track,
+.quota-glow,
+.quota-value,
 .time-track,
+.time-glow,
 .time-value {
   fill: none;
-}
-
-.ring-track,
-.ring-value {
-  stroke-width: 7;
-}
-
-.ring-track {
-  stroke: #202a35;
-}
-
-.ring-value,
-.time-value {
   stroke-linecap: round;
 }
 
-.time-track,
-.time-value {
-  stroke-width: 2.5;
+.quota-track {
+  stroke: #2c3037;
+  stroke-width: 7.5;
+  stroke-dasharray: 86 14;
+}
+
+.quota-glow {
+  stroke-width: 10;
+  opacity: 0.14;
+}
+
+.quota-value {
+  stroke-width: 7.4;
 }
 
 .time-track {
-  stroke: #141b24;
+  stroke: #242832;
+  stroke-width: 5.8;
+  stroke-dasharray: 86 14;
+}
+
+.time-glow,
+.time-value {
+  stroke: var(--ow-purple);
+}
+
+.time-glow {
+  stroke-width: 8;
+  opacity: 0.17;
 }
 
 .time-value {
-  stroke: #27e7f4;
-  opacity: 0.72;
+  stroke-width: 5.7;
 }
 
 .ring-center {
-  width: 112px;
-  height: 112px;
+  width: 136px;
+  height: 136px;
   position: absolute;
   top: 0;
   left: 0;
@@ -306,49 +358,86 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding-bottom: 2px;
 }
 
 .ring-center strong {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 21px;
+  color: var(--ow-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 30px;
   font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.03em;
 }
 
-.ring-center span,
-.ring-meta {
-  color: #adb9cc;
-  font-size: 10px;
+.ring-countdown,
+.ring-orb-label {
+  margin-top: 4px;
+  color: var(--ow-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.ring-orb-label {
+  display: none;
 }
 
 .ring-meta {
-  width: 112px;
+  width: 136px;
   position: absolute;
-  top: 113px;
+  top: 136px;
+  color: var(--ow-text);
   text-align: center;
 }
 
-.ring-meta small {
+.ring-meta strong {
   display: block;
-  color: #6d7888;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 18px;
 }
 
 .muted {
-  opacity: 0.52;
+  opacity: 0.48;
 }
 
 .muted-note,
 .local-empty {
   margin: 0;
-  color: #7f8ba0;
+  color: var(--ow-dim);
   font-size: 11px;
 }
 
+.today-total {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 3px;
+  color: #ff6a1a;
+}
+
+.today-total strong {
+  color: var(--ow-text);
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1;
+}
+
 .hourly-chart {
-  height: 89px;
+  height: 82px;
   display: grid;
   grid-template-columns: repeat(24, minmax(0, 1fr));
   align-items: end;
-  gap: 3px;
+  gap: 4px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 22px,
+    rgb(255 255 255 / 8%) 23px,
+    transparent 24px
+  );
 }
 
 .hour-bar {
@@ -366,149 +455,163 @@ button {
   min-height: 3px;
   display: block;
   height: var(--bar-height);
-  border-radius: 3px 3px 1px 1px;
-  background: #29cdd7;
-  opacity: 0.72;
+  border-radius: 2px 2px 1px 1px;
+  background: linear-gradient(180deg, #2ce1f4 0%, #0799d6 100%);
+  box-shadow: 0 0 8px rgb(39 231 244 / 12%);
+  opacity: 0.9;
 }
 
 .hour-bar:hover span,
 .hour-bar:focus-visible span,
 .hour-bar.selected span {
   opacity: 1;
-  filter: brightness(1.35);
-  outline: 1px solid #27e7f4;
+  filter: brightness(1.22);
+  outline: 1px solid var(--ow-cyan);
 }
 
 .hour-bar.missing span {
-  background: #303844;
+  background: var(--ow-border);
+  box-shadow: none;
 }
 
 .axis {
   display: flex;
   justify-content: space-between;
-  margin: 3px 0 9px;
-  color: #647084;
+  margin: 4px 0 8px;
+  color: var(--ow-muted);
   font-size: 9px;
+  line-height: 12px;
 }
 
 .composition {
-  height: 10px;
-  display: flex;
+  height: 26px;
+  position: relative;
   overflow: hidden;
-  border-radius: 5px;
+  border-radius: 13px;
   background: #202a35;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
 }
 
 .composition-block {
-  min-height: 28px;
+  min-height: 26px;
 }
 
-.composition span {
+.composition-segments {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.composition-segment {
   min-width: 2px;
 }
 
 .blue {
-  background: #4a8cff;
+  background: linear-gradient(90deg, #1598dc, #35a6ff);
 }
 
 .purple {
-  background: #9d6bff;
+  background: linear-gradient(90deg, #6075ee, #9d6bff);
 }
 
 .green {
-  background: #38d6a3;
+  background: linear-gradient(90deg, #27cfc1, #13b8ae);
 }
 
-.composition-labels {
-  display: flex;
-  justify-content: space-between;
-  gap: 5px;
-  margin-top: 4px;
-  color: #8f9aae;
-  font-size: 9px;
+.composition-copy {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  padding: 0 10px;
+  color: #f7fbff;
+  font-size: 9.5px;
+  font-weight: 550;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 68%);
 }
 
-.composition-labels small {
-  display: block;
-  color: #6fc8ff;
-  font-size: 8px;
+.composition-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composition-copy span:first-child {
+  text-align: left;
+}
+
+.composition-copy span:nth-child(2) {
+  text-align: center;
+}
+
+.composition-copy span:last-child {
+  text-align: right;
+}
+
+.composition-copy small {
+  color: #d8f7ff;
+  font-size: 0.9em;
 }
 
 .today-summary,
 .trend-summary {
+  color: var(--ow-muted);
+  font-size: 11.5px;
+}
+
+.today-summary {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 8px;
-  color: #adb9cc;
-  font-size: 11px;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.today-summary > span:last-child {
+  text-align: right;
 }
 
 .today-summary b,
 .trend-summary b {
-  color: #f4f7fb;
+  color: var(--ow-text);
+}
+
+.today-summary b {
+  margin-left: 4px;
+  font-size: 13.5px;
+  font-weight: 650;
 }
 
 .today-summary small,
 .trend-summary small {
   display: block;
-  color: #7f8ba0;
-  font-size: 8px;
-  text-align: right;
-}
-
-.trend-summary {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  margin-top: 6px;
-  padding-right: 58px;
-  text-align: center;
-}
-
-.trend-summary > span {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.trend-summary > span > b {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px;
-}
-
-.trend-summary small {
-  text-align: center;
-}
-
-.trend-summary .trend-value {
-  grid-column: 1 / -1;
+  color: var(--ow-dim);
+  font-size: 8.5px;
 }
 
 .weekly-wrap {
-  height: calc(100% - 25px);
-  --day-label-width: 32px;
+  height: calc(100% - 48px);
+  --day-label-width: 40px;
   overflow: hidden;
 }
 
 .week-axis {
+  height: 15px;
   display: grid;
   grid-template-columns: var(--day-label-width) repeat(24, var(--heat-cell-size));
   column-gap: 3px;
   justify-content: start;
-}
-
-.week-axis {
-  height: 14px;
   margin-bottom: 4px;
-  color: #647084;
+  color: var(--ow-muted);
   font-size: 8px;
-  line-height: 12px;
+  line-height: 13px;
   text-align: center;
 }
 
 .weekly-body {
-  height: calc(100% - 18px);
+  height: calc(100% - 19px);
   display: flex;
   align-items: flex-start;
   gap: 3px;
@@ -524,7 +627,7 @@ button {
 
 .day-labels span {
   overflow: hidden;
-  color: #7f8ba0;
+  color: var(--ow-muted);
   font-size: 9px;
   line-height: var(--heat-cell-size);
   white-space: nowrap;
@@ -547,7 +650,7 @@ button {
   min-width: 0;
   padding: 0;
   border: 0;
-  border-radius: 2px;
+  border-radius: 3px;
   appearance: none;
   cursor: pointer;
 }
@@ -562,12 +665,12 @@ button {
 .calendar-cell:focus-visible,
 .calendar-cell.selected {
   z-index: 1;
-  outline: 1px solid #27e7f4;
+  outline: 1px solid var(--ow-cyan);
   outline-offset: 1px;
 }
 
 .l0 {
-  background: #161a19;
+  background: #151a18;
 }
 
 .l1 {
@@ -592,27 +695,30 @@ button {
 
 .missing {
   background: #0e1215;
-  outline: 1px dashed #303844;
+  outline: 1px solid rgb(48 56 68 / 62%);
+  outline-offset: -1px;
 }
 
 .legend {
-  display: inline-flex;
+  width: max-content;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  color: #8996a8;
-  font-size: 9px;
+  gap: 6px;
+  margin: 7px auto 0;
+  color: var(--ow-muted);
+  font-size: 9.5px;
 }
 
 .legend i {
-  width: 40px;
-  height: 5px;
+  width: 118px;
+  height: 10px;
   display: inline-block;
   border-radius: 3px;
-  background: linear-gradient(90deg, #161a19, #4e6f25, #a4b61e, #ffb320, #ff5b2d);
+  background: linear-gradient(90deg, #213326, #4e6f25, #a4b61e, #ffb320, #ff5b2d);
 }
 
 .calendar-wrap {
-  height: calc(100% - 88px);
+  height: calc(100% - 96px);
   display: grid;
   grid-template-columns: repeat(7, var(--calendar-cell-size));
   grid-template-rows: 14px repeat(5, var(--calendar-cell-size));
@@ -622,8 +728,8 @@ button {
 }
 
 .weekday {
-  color: #7f8ba0;
-  font-size: 9px;
+  color: var(--ow-muted);
+  font-size: 9.5px;
   line-height: 14px;
   text-align: center;
 }
@@ -632,19 +738,57 @@ button {
   width: var(--calendar-cell-size);
   height: var(--calendar-cell-size);
   color: #edf4e8;
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 550;
 }
 
 .calendar-cell.l3,
 .calendar-cell.l4,
 .calendar-cell.l5 {
   color: #11170e;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .calendar-cell.placeholder {
-  background: #11161c;
+  border: 0;
+  background: #0e1215;
+  box-shadow: none;
+  opacity: 1;
+  outline: 0;
   cursor: default;
+}
+
+.trend-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px 5px;
+  margin-top: 5px;
+  text-align: center;
+}
+
+.trend-summary > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.trend-summary > span > b {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.trend-summary small {
+  text-align: center;
+}
+
+.trend-summary .trend-value {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+
+.trend-summary .trend-value b {
+  font-size: 18px;
 }
 
 .tooltip {
@@ -653,11 +797,12 @@ button {
   right: 12px;
   bottom: 9px;
   z-index: 5;
-  padding: 5px 7px;
+  padding: 6px 8px;
   border: 1px solid #3e5567;
-  border-radius: 4px;
+  border-radius: 5px;
   color: #e9f4fb;
-  background: rgb(2 4 7 / 94%);
+  background: rgb(2 4 7 / 96%);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 42%);
   font-size: 10px;
   line-height: 1.35;
   pointer-events: none;
@@ -667,41 +812,28 @@ button {
   width: 56px;
   height: 56px;
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   z-index: 10;
   overflow: hidden;
   padding: 0;
-  border: 1px solid #27e7f4;
+  border: 1px solid rgb(39 231 244 / 86%);
   border-radius: 50%;
-  color: #f4f7fb;
-  background: #0d121a;
-  box-shadow: 0 0 22px rgb(39 231 244 / 34%);
+  color: var(--ow-text);
+  background: radial-gradient(circle at 50% 42%, #101722 0%, #080c12 68%, #05070b 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 6%),
+    inset 0 0 16px rgb(39 231 244 / 9%);
   cursor: grab;
   touch-action: none;
 }
 
-.floating-orb.expanded.anchor-top-left {
-  inset: 0 auto auto 0;
-}
-
-.floating-orb.expanded.anchor-top-right {
-  inset: 0 0 auto auto;
-}
-
-.floating-orb.expanded.anchor-bottom-left {
-  inset: auto auto 0 0;
-}
-
-.floating-orb.expanded.anchor-bottom-right {
-  inset: auto 0 0 auto;
-}
-
 .floating-orb:hover,
 .floating-orb:focus-visible {
-  outline: 1px solid #f4f7fb;
-  outline-offset: -3px;
-  box-shadow: 0 0 28px rgb(39 231 244 / 52%);
+  border-color: #fff;
+  outline: 0;
+  box-shadow:
+    inset 0 0 0 1px rgb(39 231 244 / 70%),
+    inset 0 0 18px rgb(39 231 244 / 16%);
 }
 
 .floating-orb.dragging {
@@ -713,11 +845,11 @@ button {
 .floating-orb.offline,
 .floating-orb.invalid_credential {
   border-color: #586271;
-  box-shadow: 0 0 16px rgb(88 98 113 / 28%);
+  box-shadow: inset 0 0 12px rgb(88 98 113 / 20%);
 }
 
 .floating-orb.stale {
-  opacity: 0.7;
+  opacity: 0.72;
 }
 
 .orb-slide {
@@ -737,23 +869,34 @@ button {
 }
 
 .floating-orb .quota-ring {
-  width: 50px;
-  height: 56px;
-  margin: 2px;
+  width: 54px;
+  height: 54px;
+  margin: 0;
 }
 
 .floating-orb .quota-ring svg,
 .floating-orb .ring-center {
-  width: 50px;
-  height: 50px;
+  width: 54px;
+  height: 54px;
+}
+
+.floating-orb .ring-center {
+  padding-top: 1px;
 }
 
 .floating-orb .ring-center strong {
-  font-size: 12px;
+  font-size: 14px;
+  letter-spacing: -0.035em;
 }
 
-.floating-orb .ring-center span {
-  font-size: 8px;
+.floating-orb .ring-countdown {
+  display: none;
+}
+
+.floating-orb .ring-orb-label {
+  display: block;
+  margin-top: 3px;
+  font-size: 8.5px;
 }
 
 .floating-orb .ring-meta {
@@ -762,7 +905,7 @@ button {
 
 .widget-root.stale .quadrants,
 .widget-root.reconnecting .quadrants {
-  opacity: 0.7;
+  opacity: 0.72;
 }
 
 .state-banner {
@@ -785,35 +928,332 @@ button {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-@media (max-width: 980px) {
-  .quadrant {
-    padding: 10px;
+@media (max-width: 1100px) {
+  .overview-panel {
+    inset: 2px;
   }
 
-  .quota-rings {
-    width: 250px;
-    flex-basis: 250px;
-    gap: 15px;
+  .overview-header {
+    height: 40px;
+    padding: 0 14px;
+  }
+
+  .overview-header h1 {
+    font-size: 13px;
+  }
+
+  .header-actions {
+    gap: 7px;
+    font-size: 10.5px;
+  }
+
+  .quadrants {
+    height: calc(100% - 40px);
+  }
+
+  .quadrant {
+    padding: 11px 12px;
+  }
+
+  .panel-heading {
+    min-height: 18px;
+    margin-bottom: 4px;
+  }
+
+  .eyebrow {
+    font-size: 11.5px;
   }
 
   .quota-content {
+    height: calc(100% - 22px);
+    grid-template-columns: minmax(230px, 1.08fr) minmax(185px, 0.92fr);
     gap: 8px;
   }
 
-  .quota-details {
-    gap: 4px;
+  .quota-rings {
+    height: 142px;
+    gap: 5px;
   }
 
-  .composition-labels {
+  .quota-ring {
+    width: 112px;
+    height: 140px;
+    flex-basis: 112px;
+  }
+
+  .quota-ring svg,
+  .ring-center {
+    width: 112px;
+    height: 112px;
+  }
+
+  .ring-center strong {
+    font-size: 25px;
+  }
+
+  .ring-countdown {
+    font-size: 9.5px;
+  }
+
+  .ring-meta {
+    width: 112px;
+    top: 112px;
+  }
+
+  .ring-meta strong {
+    font-size: 11px;
+    line-height: 14px;
+  }
+
+  .quota-details {
+    gap: 1px;
+  }
+
+  .quota-details > div {
+    min-height: 27px;
+    grid-template-columns: 21px minmax(0, 1fr) auto;
+    column-gap: 5px;
+  }
+
+  .quota-details dt {
+    font-size: 9.5px;
+  }
+
+  .quota-details dd {
+    font-size: 10.5px;
+  }
+
+  .detail-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .today-total {
+    height: 22px;
+    margin-bottom: 2px;
+  }
+
+  .today-total strong {
+    font-size: 16px;
+  }
+
+  .hourly-chart {
+    height: 70px;
+    gap: 3px;
+  }
+
+  .axis {
+    margin: 3px 0 5px;
     font-size: 8px;
+  }
+
+  .composition {
+    height: 22px;
+    border-radius: 11px;
+  }
+
+  .composition-block {
+    min-height: 22px;
+  }
+
+  .composition-copy {
+    padding: 0 6px;
+    font-size: 8px;
+  }
+
+  .today-summary {
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  .today-summary b {
+    font-size: 11.5px;
+  }
+
+  .weekly-wrap {
+    --day-label-width: 35px;
+  }
+
+  .legend {
+    margin-top: 5px;
+  }
+
+  .legend i {
+    width: 96px;
+    height: 8px;
+  }
+
+  .calendar-wrap {
+    height: calc(100% - 78px);
+  }
+
+  .trend-summary {
+    margin-top: 5px;
+    font-size: 10px;
+  }
+
+  .trend-summary > span > b {
+    font-size: 12px;
+  }
+
+  .trend-summary .trend-value b {
+    font-size: 15px;
   }
 }
 
-/* The browser QA canvas scales the approved concept. Native Wails windows are
-   1120×580 or 920×500 and therefore use the compact rules above. */
+@media (min-width: 1200px) and (max-width: 1499px) and (min-height: 650px) {
+  .overview-header {
+    height: 50px;
+    padding: 0 22px;
+  }
+
+  .overview-header h1 {
+    font-size: 17px;
+  }
+
+  .header-actions {
+    font-size: 12.5px;
+  }
+
+  .quadrants {
+    height: calc(100% - 50px);
+    grid-template-rows: 48.4% 51.6%;
+  }
+
+  .quadrant {
+    padding: 20px 22px;
+  }
+
+  .panel-heading {
+    min-height: 22px;
+    margin-bottom: 8px;
+  }
+
+  .eyebrow {
+    font-size: 15px;
+  }
+
+  .quota-content {
+    height: calc(100% - 30px);
+    grid-template-columns: minmax(350px, 1.15fr) minmax(255px, 0.85fr);
+    gap: 22px;
+  }
+
+  .quota-rings {
+    height: 198px;
+    gap: 22px;
+  }
+
+  .quota-ring {
+    width: 164px;
+    height: 194px;
+    flex-basis: 164px;
+  }
+
+  .quota-ring svg,
+  .ring-center {
+    width: 164px;
+    height: 164px;
+  }
+
+  .ring-center strong {
+    font-size: 36px;
+  }
+
+  .ring-countdown {
+    margin-top: 5px;
+    font-size: 13px;
+  }
+
+  .ring-meta {
+    width: 164px;
+    top: 164px;
+  }
+
+  .ring-meta strong {
+    font-size: 15px;
+    line-height: 20px;
+  }
+
+  .quota-details {
+    gap: 5px;
+  }
+
+  .quota-details > div {
+    min-height: 36px;
+    grid-template-columns: 27px minmax(0, 1fr) auto;
+  }
+
+  .quota-details dt,
+  .quota-details dd {
+    font-size: 12px;
+  }
+
+  .hourly-chart {
+    height: 100px;
+    gap: 5px;
+  }
+
+  .today-total {
+    height: 28px;
+    margin: 3px 0 6px;
+  }
+
+  .today-total strong {
+    font-size: 21px;
+  }
+
+  .axis {
+    font-size: 10.5px;
+  }
+
+  .composition {
+    height: 28px;
+    border-radius: 14px;
+  }
+
+  .composition-copy {
+    padding: 0 12px;
+    font-size: 10.5px;
+  }
+
+  .today-summary,
+  .trend-summary {
+    font-size: 12.5px;
+  }
+
+  .weekly-wrap {
+    --day-label-width: 50px;
+  }
+
+  .week-axis,
+  .day-labels span {
+    font-size: 10px;
+  }
+
+  .calendar-wrap {
+    height: calc(100% - 90px);
+  }
+
+  .weekday,
+  .calendar-cell {
+    font-size: 11px;
+  }
+
+  .trend-summary > span > b {
+    font-size: 18px;
+  }
+
+  .trend-summary .trend-value b {
+    font-size: 22px;
+  }
+}
+
 @media (min-width: 1500px) and (min-height: 850px) {
   .overview-panel {
     inset: 39px 69px 108px 68px;
@@ -839,42 +1279,34 @@ button {
   }
 
   .quadrant {
-    padding: 22px 26px;
+    padding: 20px 26px;
   }
 
   .panel-heading {
-    margin-bottom: 12px;
+    min-height: 22px;
+    margin-bottom: 10px;
   }
 
-  .panel-heading strong,
   .eyebrow {
-    font-size: 14px;
-  }
-
-  .quota-rings {
-    width: 422px;
-    height: 235px;
-    flex-basis: 422px;
-    gap: 42px;
+    font-size: 16px;
   }
 
   .quota-content {
+    height: calc(100% - 32px);
+    grid-template-columns: 422px minmax(250px, 1fr);
     align-items: flex-start;
-    gap: 32px;
+    gap: 30px;
   }
 
-  .quota-details {
-    gap: 13px;
-  }
-
-  .quota-details dt,
-  .quota-details dd {
-    font-size: 13px;
+  .quota-rings {
+    height: 235px;
+    gap: 34px;
   }
 
   .quota-ring {
     width: 190px;
-    height: 205px;
+    height: 224px;
+    flex-basis: 190px;
   }
 
   .quota-ring svg,
@@ -884,40 +1316,75 @@ button {
   }
 
   .ring-center strong {
-    font-size: 30px;
+    font-size: 39px;
   }
 
-  .ring-center span,
-  .ring-meta {
-    font-size: 13px;
+  .ring-countdown {
+    margin-top: 6px;
+    font-size: 14px;
   }
 
   .ring-meta {
     width: 190px;
-    top: 193px;
+    top: 190px;
+  }
+
+  .ring-meta strong {
+    font-size: 16px;
+    line-height: 20px;
+  }
+
+  .ring-meta small {
+    font-size: 10px;
+  }
+
+  .quota-details {
+    gap: 7px;
+    padding-top: 14px;
+  }
+
+  .quota-details > div {
+    min-height: 39px;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    column-gap: 9px;
+  }
+
+  .quota-details dt,
+  .quota-details dd {
+    font-size: 13px;
+  }
+
+  .today-total {
+    height: 30px;
+    margin: 5px 0 8px;
+  }
+
+  .today-total strong {
+    font-size: 22px;
   }
 
   .hourly-chart {
-    height: 120px;
+    height: 100px;
     gap: 5px;
   }
 
-  .today-panel .hourly-chart {
-    margin-top: 55px;
-  }
-
-  .axis,
-  .composition-labels {
+  .axis {
     font-size: 11px;
   }
 
   .composition {
-    height: 14px;
+    height: 32px;
+    border-radius: 16px;
   }
 
   .composition-block {
-    min-height: 47px;
-    margin-top: 15px;
+    min-height: 32px;
+    margin-top: 8px;
+  }
+
+  .composition-copy {
+    padding: 0 14px;
+    font-size: 12px;
   }
 
   .today-summary,
@@ -925,8 +1392,41 @@ button {
     font-size: 13px;
   }
 
-  .trend-summary {
-    padding-right: 118px;
+  .today-summary b {
+    font-size: 16px;
+  }
+
+  .weekly-wrap {
+    height: calc(100% - 56px);
+    --day-label-width: 56px;
+  }
+
+  .week-axis {
+    height: 18px;
+    font-size: 10px;
+  }
+
+  .day-labels span {
+    font-size: 11px;
+  }
+
+  .legend {
+    margin-top: 10px;
+    font-size: 11px;
+  }
+
+  .legend i {
+    width: 170px;
+    height: 12px;
+  }
+
+  .calendar-wrap {
+    height: calc(100% - 112px);
+  }
+
+  .weekday,
+  .calendar-cell {
+    font-size: 11px;
   }
 
   .trend-summary > span > b {
@@ -935,46 +1435,6 @@ button {
 
   .trend-summary .trend-value b {
     font-size: 22px;
-  }
-
-  .calendar-wrap {
-    height: 220px;
-  }
-
-  .weekly-wrap {
-    height: calc(100% - 31px);
-    --day-label-width: 56px;
-  }
-
-  .floating-orb.expanded.anchor-bottom-right {
-    width: 130px;
-    height: 130px;
-    inset: auto 32px 53px auto;
-  }
-
-  .floating-orb .quota-ring {
-    width: 50px;
-    height: 56px;
-  }
-
-  .floating-orb.expanded .quota-ring {
-    width: 118px;
-    height: 128px;
-    margin: 5px;
-  }
-
-  .floating-orb.expanded .quota-ring svg,
-  .floating-orb.expanded .ring-center {
-    width: 118px;
-    height: 118px;
-  }
-
-  .floating-orb.expanded .ring-center strong {
-    font-size: 25px;
-  }
-
-  .floating-orb.expanded .ring-center span {
-    font-size: 12px;
   }
 }
 

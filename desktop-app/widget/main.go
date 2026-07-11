@@ -49,9 +49,10 @@ func main() {
 		AssetServer:        &assetserver.Options{Assets: assets},
 		Bind:               []interface{}{app},
 		OnStartup:          app.Startup,
+		OnDomReady:         app.DomReady,
 		OnShutdown:         app.Shutdown,
 		SingleInstanceLock: &options.SingleInstanceLock{UniqueId: "ai.openwatcher.widget"},
-		Mac:                &mac.Options{WebviewIsTransparent: true, WindowIsTranslucent: true, DisableZoom: true},
+		Mac:                &mac.Options{WebviewIsTransparent: true, DisableZoom: true},
 		Windows:            &windows.Options{WebviewIsTransparent: true, WindowIsTranslucent: true, DisableWindowIcon: true},
 	})
 	if err != nil {

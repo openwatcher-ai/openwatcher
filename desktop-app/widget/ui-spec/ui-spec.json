@@ -9,7 +9,7 @@
     ],
     "normalization": "prototype-normalization.json",
     "analysisAt": "2026-07-11T10:10:00.000Z",
-    "notes": "Approved image-generation concept. Structural rules in the committed design override generated geometry: both heatmaps use square cells, the weekly grid is exactly 7x24, the rolling calendar is exactly 5x7, and duplicated today metrics are removed from the quota quadrant. Page-diff thresholds include only these intentional structural differences."
+    "notes": "Approved image-generation concept. Structural rules in the committed design override generated geometry: both heatmaps use square cells, the weekly grid is exactly 7x24, the rolling calendar uses chronological Monday-to-Sunday rows and may use a sixth row when the 30-day range spans six natural weeks, and duplicated today metrics are removed from the quota quadrant. Page-diff thresholds include only these intentional structural differences."
   },
   "target": {
     "platform": "native-app",
@@ -198,7 +198,7 @@
           "avoid": [
             "rectangular-calendar-cells"
           ],
-          "notes": "Five-by-seven weekday occurrence calendar plus three summaries and value."
+          "notes": "Five- or six-by-seven chronological weekday calendar plus three summaries and value."
         }
       },
       {
@@ -290,7 +290,7 @@
       {
         "id": "calendar-grid",
         "type": "component",
-        "name": "Five-by-seven calendar heatmap",
+        "name": "Chronological calendar heatmap",
         "component": "Calendar30d",
         "parentId": "trend-panel",
         "bbox": {
@@ -305,9 +305,9 @@
           "preferredCss": "grid",
           "avoid": [
             "stretched-grid-cells",
-            "natural-month-sixth-row"
+            "weekday-occurrence-reordering"
           ],
-          "notes": "Exactly 35 square slots: 30 data cells and 5 placeholders."
+          "notes": "Chronological Monday-to-Sunday rows with square cells; use 35 slots normally and 42 when the rolling range spans six natural weeks."
         }
       },
       {
@@ -685,13 +685,14 @@
     "rules": [
       "Keep two columns and two rows down to the native minimum.",
       "Scale typography, padding, ring size and cell gaps together.",
-      "Never change the weekly or calendar cell counts.",
+      "Keep the weekly cell count fixed and derive calendar rows from the chronological week span.",
       "Below the structural minimum, allow panel scrolling rather than dropping modules."
     ]
   },
   "implementationHints": [
     "Use the existing Vue 3 and Vite stack.",
     "Use SVG for quota rings and DOM/CSS Grid for charts.",
+    "Use one zero level plus five non-zero quantile levels for both heatmaps so outlier peaks do not flatten visible variation.",
     "Use ResizeObserver to compute one integer square cell size.",
     "Keep HTTP, SSE, credentials and window placement in Go.",
     "Use data-ui-id on every visual QA node.",
@@ -702,7 +703,7 @@
       "One compact header and four simultaneous quadrants",
       "Exactly 24 today bars",
       "Exactly 168 weekly heatmap cells",
-      "Exactly 35 rolling calendar slots with 30 data cells",
+      "Chronological rolling calendar with 35 or 42 slots and 30 data cells",
       "All heatmap cells are square",
       "No session details or duplicated today metrics in quota panel"
     ],

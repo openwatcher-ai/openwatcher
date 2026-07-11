@@ -1,8 +1,11 @@
 <template>
   <section data-ui-id="today-panel" class="quadrant today-panel">
     <div class="panel-heading">
-      <span class="eyebrow">今日 · 24 小时</span>
-      <strong>{{ today ? `${format(today.totalTokens)} tokens` : '今日数据不可用' }}</strong>
+      <span class="eyebrow">今日 24 小时</span>
+    </div>
+    <div class="today-total">
+      <Flame :size="18" />
+      <strong>{{ today ? format(today.totalTokens) : '今日数据不可用' }}</strong>
     </div>
     <HourlyBarChart
       :buckets="buckets"
@@ -14,13 +17,7 @@
       <span v-for="label in ['00', '04', '08', '12', '16', '20', '24']" :key="label">{{ label }}</span>
     </div>
     <div data-ui-id="today-composition" class="composition-block">
-      <UsageCompositionBar :parts="parts" />
-      <div class="composition-labels">
-        <span v-for="part in parts" :key="part.kind">
-          {{ part.kind }} {{ format(part.value) }}
-          <small v-if="part.kind === '缓存输入'">CHR {{ chr }}</small>
-        </span>
-      </div>
+      <UsageCompositionBar :parts="parts" :chr="chr" />
     </div>
     <div class="today-summary">
       <span>今日总量 <b>{{ format(today?.totalTokens) }}</b></span>
@@ -36,6 +33,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { Flame } from '@lucide/vue'
 import { composition, formatCompact } from '../state/widget.js'
 import HourlyBarChart from './HourlyBarChart.vue'
 import Tooltip from './Tooltip.vue'

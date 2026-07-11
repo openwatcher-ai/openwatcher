@@ -4,11 +4,13 @@ import { reconcileSelection, statusCopy } from './pure.mjs'
 
 export {
   calendarCells,
+  buildHeatScale,
   composition,
   dayTooltip,
   formatCompact,
   hourTooltip,
   hours24,
+  heatScaleLevel,
   week168,
   weekTooltip,
 } from './pure.mjs'
