@@ -64,6 +64,82 @@ func TestParseUsageAllowsMissingCreditsAndWindow(t *testing.T) {
 	}
 }
 
+func TestParseUsageClassifiesSoleWeeklyPrimaryByDuration(t *testing.T) {
+	now := time.Unix(1000, 0)
+	payload := []byte(`{
+	  "plan_type": "pro",
+	  "rate_limit": {
+	    "primary_window": {
+	      "used_percent": 31,
+	      "limit_window_seconds": 604800,
+	      "reset_after_seconds": 471600
+	    }
+	  }
+	}`)
+
+	snapshot, err := ParseUsage(payload, now)
+	if err != nil {
+		t.Fatalf("ParseUsage() error = %v", err)
+	}
+	if snapshot.FiveHour != nil {
+		t.Fatalf("five hour = %#v, want nil", snapshot.FiveHour)
+	}
+	if snapshot.Weekly == nil {
+		t.Fatal("weekly = nil")
+	}
+	if snapshot.Weekly.RemainingPercent != 69 || snapshot.Weekly.ResetAt != 472600 {
+		t.Fatalf("weekly = %#v", snapshot.Weekly)
+	}
+}
+
+func TestParseUsageClassifiesReorderedWindowsByDuration(t *testing.T) {
+	payload := []byte(`{
+	  "rate_limit": {
+	    "primary_window": {
+	      "used_percent": 25,
+	      "limit_window_seconds": 604800,
+	      "reset_at": 7000
+	    },
+	    "secondary_window": {
+	      "used_percent": 10,
+	      "limit_window_seconds": 18000,
+	      "reset_at": 2000
+	    }
+	  }
+	}`)
+
+	snapshot, err := ParseUsage(payload, time.Unix(1000, 0))
+	if err != nil {
+		t.Fatalf("ParseUsage() error = %v", err)
+	}
+	if snapshot.FiveHour == nil || snapshot.FiveHour.RemainingPercent != 90 || snapshot.FiveHour.ResetAt != 2000 {
+		t.Fatalf("five hour = %#v", snapshot.FiveHour)
+	}
+	if snapshot.Weekly == nil || snapshot.Weekly.RemainingPercent != 75 || snapshot.Weekly.ResetAt != 7000 {
+		t.Fatalf("weekly = %#v", snapshot.Weekly)
+	}
+}
+
+func TestParseUsageDoesNotMislabelUnsupportedExplicitDuration(t *testing.T) {
+	payload := []byte(`{
+	  "rate_limit": {
+	    "primary_window": {
+	      "used_percent": 50,
+	      "limit_window_seconds": 86400,
+	      "reset_at": 2000
+	    }
+	  }
+	}`)
+
+	snapshot, err := ParseUsage(payload, time.Unix(1000, 0))
+	if err != nil {
+		t.Fatalf("ParseUsage() error = %v", err)
+	}
+	if snapshot.FiveHour != nil || snapshot.Weekly != nil {
+		t.Fatalf("unsupported duration was mislabeled: %#v", snapshot)
+	}
+}
+
 func TestFetchUsesCodexAuthAndDoesNotRequireAccountID(t *testing.T) {
 	codexHome := t.TempDir()
 	if err := os.WriteFile(filepath.Join(codexHome, "auth.json"), []byte(`{"tokens":{"access_token":"secret-token"}}`), 0o600); err != nil {
