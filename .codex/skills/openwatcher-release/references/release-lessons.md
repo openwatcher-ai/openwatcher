@@ -77,3 +77,9 @@
 
 - Wails 在非目标系统交叉构建时会跳过平台 post-build hook；跨平台预检不能只看 `wails build` 成功，必须单独执行并验证资源同步程序，正式产物仍以对应原生 GitHub runner 的构建为准。
 - Desktop 引入嵌套 helper 后，存在性检查要同时进入打包脚本和最终 ZIP artifact gate；只检查主程序与 sidecar 会让“本地能编译、发布包漏 helper”悄悄通过。
+
+### 2026-07-13
+
+- 单维护者仓库不能把“必须由仓库管理员批准 PR”设为必需检查：PR 作者无法批准自己的 PR，会形成无人可以解除的发布死锁。保留 PR、线性历史和自动 preflight 即可，人工批准数应为 0。
+- 组件级发布复用 Watch 时，本次 Product Release 的 `checksums.txt` 不会重复包含旧 APK；official 发布面验证必须按 `components.watch.sourceReleaseTag` 读取源 Release checksums，再校验官网 current APK 的大小和 SHA256。
+- 下载大体积 Release 资产做最终校验时，进程被中断可能留下可读但不完整的本地文件；发现单文件 checksum 异常应先核对 `sizeBytes` 并重新独立下载，不能仅凭残片误判远端资产损坏。
