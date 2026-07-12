@@ -17,6 +17,11 @@ import (
 
 const DefaultUsageEndpoint = "https://chatgpt.com/backend-api/wham/usage"
 
+const (
+	fiveHourWindowSeconds = int64((5 * time.Hour) / time.Second)
+	weeklyWindowSeconds   = int64((7 * 24 * time.Hour) / time.Second)
+)
+
 type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
@@ -110,14 +115,20 @@ func ParseUsage(data []byte, now time.Time) (*Snapshot, error) {
 		return nil, err
 	}
 
-	fiveHour, err := normalizeWindow(payload.RateLimit.PrimaryWindow, now)
+	primary, err := normalizeWindow(payload.RateLimit.PrimaryWindow, now)
 	if err != nil {
 		return nil, fmt.Errorf("primary window: %w", err)
 	}
-	weekly, err := normalizeWindow(payload.RateLimit.SecondaryWindow, now)
+	secondary, err := normalizeWindow(payload.RateLimit.SecondaryWindow, now)
 	if err != nil {
 		return nil, fmt.Errorf("secondary window: %w", err)
 	}
+	fiveHour, weekly := classifyWindows(
+		payload.RateLimit.PrimaryWindow,
+		primary,
+		payload.RateLimit.SecondaryWindow,
+		secondary,
+	)
 
 	return &Snapshot{
 		Source:   "oauth-api",
@@ -138,10 +149,69 @@ type usageResponse struct {
 }
 
 type usageWindow struct {
-	UsedPercent       flexibleFloat `json:"used_percent"`
-	ResetAt           flexibleInt   `json:"reset_at"`
-	ResetsAt          flexibleInt   `json:"resets_at"`
-	ResetAfterSeconds flexibleInt   `json:"reset_after_seconds"`
+	UsedPercent        flexibleFloat `json:"used_percent"`
+	LimitWindowSeconds flexibleInt   `json:"limit_window_seconds"`
+	ResetAt            flexibleInt   `json:"reset_at"`
+	ResetsAt           flexibleInt   `json:"resets_at"`
+	ResetAfterSeconds  flexibleInt   `json:"reset_after_seconds"`
+}
+
+type windowKind uint8
+
+const (
+	windowKindLegacy windowKind = iota
+	windowKindFiveHour
+	windowKindWeekly
+	windowKindUnsupported
+)
+
+func classifyWindows(
+	primaryInput *usageWindow,
+	primary *Window,
+	secondaryInput *usageWindow,
+	secondary *Window,
+) (*Window, *Window) {
+	var fiveHour, weekly *Window
+
+	assignKnownWindow := func(input *usageWindow, window *Window) {
+		switch classifyWindow(input) {
+		case windowKindFiveHour:
+			if fiveHour == nil {
+				fiveHour = window
+			}
+		case windowKindWeekly:
+			if weekly == nil {
+				weekly = window
+			}
+		}
+	}
+	assignKnownWindow(primaryInput, primary)
+	assignKnownWindow(secondaryInput, secondary)
+
+	// 旧响应未提供窗口周期，仅在缺少明确周期时兼容 primary=5h、secondary=7d；
+	// 已提供但不匹配的周期不能被错误标记为现有窗口。
+	if primary != nil && classifyWindow(primaryInput) == windowKindLegacy && fiveHour == nil {
+		fiveHour = primary
+	}
+	if secondary != nil && classifyWindow(secondaryInput) == windowKindLegacy && weekly == nil {
+		weekly = secondary
+	}
+
+	return fiveHour, weekly
+}
+
+func classifyWindow(input *usageWindow) windowKind {
+	if input == nil || !input.LimitWindowSeconds.Set {
+		return windowKindLegacy
+	}
+	switch input.LimitWindowSeconds.Value {
+	case fiveHourWindowSeconds:
+		return windowKindFiveHour
+	case weeklyWindowSeconds:
+		return windowKindWeekly
+	default:
+		return windowKindUnsupported
+	}
 }
 
 type flexibleFloat struct {
